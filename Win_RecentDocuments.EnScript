@@ -1,0 +1,691 @@
+class MainClass;
+
+class RecentDocListClass : NameListClass{
+  property String viewer,
+          file,
+          mtime,
+          atime,
+          ctime,
+          filesize,
+          driveType,
+          path;
+
+  RecentDocListClass(RecentDocListClass parent=null, const String &viewer="", const String &file="", const String &mtime="", const String &atime="", const String &ctime="", const String &filesize="", const String &driveType="", const String &path=""):
+
+  NameListClass(parent),
+  viewer = viewer,
+  file = file,
+  mtime = mtime,
+  atime = atime,
+  ctime = ctime,
+  filesize = filesize,
+  driveType = driveType,
+  path = path
+  {
+  }
+}
+
+class RecentDocDialogClass;
+
+class RecentDocHandlerClass : HandlerClass{
+  RecentDocDialogClass RD_dialog;
+
+  property FieldClass viewerField,
+            fileField,
+            mtimeField,
+            atimeField,
+            ctimeField,
+            filesizeField,
+            driveTypeField,
+            pathField;
+
+  MenuClass CsvMenu;
+  MenuClass SqliteMenu;
+
+  RecentDocHandlerClass(RecentDocDialogClass RD_dialog, const String &name, uint options, SymbolClass type):
+  HandlerClass(null, name, options, type),
+  RD_dialog = RD_dialog,
+  viewerField(this, "Viewer", TEXTCENTER, "viewer", "A tag"),
+  fileField(this, "FileName", TEXTCENTER, "file", "B tag"),
+  mtimeField(this, "ModifiedTime", TEXTCENTER, "mtime", "C tag"),
+  atimeField(this, "AccessedTime", TEXTCENTER, "atime", "D tag"),
+  ctimeField(this, "CreatedTime", TEXTCENTER, "ctime", "E tag"),
+  filesizeField(this, "FileSize", TEXTCENTER, "filesize", "F tag"),
+  driveTypeField(this, "DriveType", TEXTCENTER, "driveType", "G tag"),
+  pathField(this, "Path", TEXTCENTER, "path", "H tag"),
+
+  CsvMenu(MenuList, "CSV", MenuClass::TOOL),
+  SqliteMenu(MenuList, "SQLite", MenuClass::TOOL)
+  {
+    viewerField.SetColWidth(15);
+    fileField.SetColWidth(15);
+    mtimeField.SetColWidth(25);
+    atimeField.SetColWidth(25);
+    ctimeField.SetColWidth(25);
+    filesizeField.SetColWidth(10);
+    driveTypeField.SetColWidth(10);
+    pathField.SetColWidth(40);
+  }
+
+  virtual void BuildMenu(NodeEventClass event){
+    event.MenuAdd(CsvMenu, 0);
+    HandlerClass::BuildMenu(event);
+    event.MenuAdd(SqliteMenu, 0);
+    HandlerClass::BuildMenu(event);
+  }
+
+  virtual MenuReply MenuEvent(MenuClass menu, NodeEventClass event){
+    if(menu == CsvMenu){
+      String savePath = "C:\\recent_doc.csv";
+      ExportDialogClass dialog(null, savePath);
+
+      if(dialog.Execute() == SystemClass::OK){
+        LocalFileClass lf();
+        if(lf.Open(savePath, FileClass::WRITETEXTCRLF)){
+          lf.SetCodePage(CodePageClass::UTF8);
+          lf.Write("Viewer, Name, Mtime, Atime, Ctime, FileSize, DriveType, Path, \n");
+
+          foreach(RecentDocListClass n in RD_dialog.List){
+            lf.Write(n.viewer + "," + n.file + "," + n.mtime + "," + n.atime + "," + n.ctime + "," + n.filesize + "," + n.driveType + "," + n.path + ",\n");
+          }
+          lf.Close();
+          SystemClass::Message(SystemClass::ICONINFORMATION, "Notice", "Export Completed!");
+        }
+      }
+    }
+    else if(menu == SqliteMenu){
+      String exportPath = "C:\\WindowsArtifacts.sqlite";
+      ExportDialogClass dialog(null, exportPath);
+
+      if(dialog.Execute() == SystemClass::OK){
+        SQLiteClass sqliteDB();
+        LocalFileClass sqliteFile();
+        if(!sqliteFile.Open(exportPath, FileClass::APPEND)){
+          SystemClass::Message(SystemClass::ICONINFORMATION, "Error", "Error in opening local SQLite file");
+          Console.WriteLine("Error: Error in opening local SQLite file");
+          SystemClass::Exit();
+        }
+        if(sqliteDB.Open(sqliteFile, SQLiteClass::SQLITE_OPEN_READWRITE)){
+          sqliteFile.SetCodePage(CodePageClass::UTF8);
+          SQLiteClass::CommandClass cmd = new SQLiteClass::CommandClass();
+          if(sqliteDB.CreateCommand(cmd)){
+            bool isSetTable = true;
+            isSetTable = cmd.ExecuteNonQuery("CREATE TABLE App_Documents (Viewer LONGVARCHAR, Name LONGVARCHAR, mtime LONGVARCHAR, atime LONGVARCHAR, ctime LONGVARCHAR, FileSize LONGVARCHAR, DriveType LONGVARCHAR, Path LONGVARCHAR);");
+            if(isSetTable){
+              bool isQuery = true;
+              foreach(RecentDocListClass n in RD_dialog.List){
+                isQuery = cmd.ExecuteNonQuery("INSERT INTO App_Documents (Viewer,Name, mtime, atime, ctime, FileSize, DriveType, Path) VALUES ('" + n.viewer + "', '" + n.file + "', '" + n.mtime + "','" + n.atime + "','" + n.ctime + "','" + n.filesize + "','" + n.driveType + "','" + n.path + "');");
+                if(!isQuery) Console.WriteLine("\nError: Failed to execute query. Query is not correct.\n");
+              }
+            }
+            else SystemClass::Message(SystemClass::ICONINFORMATION, "Error", "SQLite Table was not set up correctly");
+          }
+          else Console.WriteLine("Error: SQLite Command could not be created successfully");
+        }
+        else SystemClass::Message(SystemClass::ICONINFORMATION, "Error", "SQLite Database Connection could not be opened correctly");
+        sqliteFile.Close();
+        sqliteDB.Close();
+      }
+      SystemClass::Message(SystemClass::ICONINFORMATION, "Notice", "Export Completed!");
+    }
+    return HandlerClass::MenuEvent(menu, event);
+  }
+}
+
+
+class RecentDocDialogClass;
+
+class RecentDocThreadClass: ThreadClass {
+  RecentDocDialogClass RD_dialog;
+  CaseClass c;
+  BookmarkClass folder;
+
+  typedef String[] StringArr;
+  typedef int[] IntArr;
+
+  RecentDocThreadClass(RecentDocDialogClass RD_dialog, const String &name, CaseClass c, BookmarkClass folder):
+  ThreadClass(null, name),
+  folder = folder,
+  c = c,
+  RD_dialog = RD_dialog
+  {
+  }
+
+  bool cmp_lnk_recent(StringArr arr, String name, String base_path){
+      String ext = base_path.GetFileExt();
+      name.ReplaceExtension("");
+      for(int i=0;i<arr.Count();i++){
+        arr[i].ReplaceExtension("");        
+        if(arr[i] == name){          
+          return true;
+        }
+      }
+      return false;
+    }
+
+  void recent_lnk(String path, String csv_path, StringArr pp_list, StringArr word_list, StringArr excel_list, StringArr hwp_list, StringArr adobe_list, SQLiteClass sql){
+      int i=0;
+      LocalFileClass lnk_csv = new LocalFileClass();
+      LocalFileClass pp = new LocalFileClass();
+      LocalFileClass word = new LocalFileClass();
+      LocalFileClass excel = new LocalFileClass();
+      LocalFileClass hwp = new LocalFileClass();
+      LocalFileClass adobe = new LocalFileClass();
+
+      lnk_csv.Open(csv_path);
+      pp.Open(path + "\\pp_recent_doc.csv", FileClass::TEXT + FileClass::WRITE);
+      word.Open(path + "\\word_recent_doc.csv", FileClass::TEXT + FileClass::WRITE);
+      excel.Open(path + "\\excel_recent_doc.csv", FileClass::TEXT + FileClass::WRITE);
+      hwp.Open(path + "\\hwp_recent_doc.csv", FileClass::TEXT + FileClass::WRITE);
+      adobe.Open(path + "\\adobe_recent_doc.csv", FileClass::TEXT + FileClass::WRITE);
+
+      String field = "Name\tMtime\tAtime\tCtime\tBasePath\tDescription\t";
+      pp.WriteLine(field);
+      word.WriteLine(field);
+      excel.WriteLine(field);
+      hwp.WriteLine(field);
+      adobe.WriteLine(field);
+
+      SQLiteClass::CommandClass cmd = new SQLiteClass::CommandClass();
+      sql.CreateCommand(cmd);
+      /*
+      cmd.ExecuteNonQuery("CREATE TABLE powerpoint (Name LONGVARCHAR, FileSize INTEGER, DriveType LONGVARCHAR, mtime LONGVARCHAR, atime LONGVARCHAR, ctime LONGVARCHAR, local_path LONGVARCHAR);");
+      cmd.ExecuteNonQuery("CREATE TABLE word (Name LONGVARCHAR, FileSize INTEGER, DriveType LONGVARCHAR, mtime LONGVARCHAR, atime LONGVARCHAR, ctime LONGVARCHAR, local_path LONGVARCHAR);");
+      cmd.ExecuteNonQuery("CREATE TABLE excel (Name LONGVARCHAR, FileSize INTEGER, DriveType LONGVARCHAR, mtime LONGVARCHAR, atime LONGVARCHAR, ctime LONGVARCHAR, local_path LONGVARCHAR);");
+      cmd.ExecuteNonQuery("CREATE TABLE hwp (Name LONGVARCHAR, FileSize INTEGER, DriveType LONGVARCHAR, mtime LONGVARCHAR, atime LONGVARCHAR, ctime LONGVARCHAR, local_path LONGVARCHAR);");
+      cmd.ExecuteNonQuery("CREATE TABLE adobe (Name LONGVARCHAR, FileSize INTEGER, DriveType LONGVARCHAR, mtime LONGVARCHAR, atime LONGVARCHAR, ctime LONGVARCHAR, local_path LONGVARCHAR);");
+    */
+      cmd.ExecuteNonQuery("CREATE TABLE App_Documents (Viewer LONGVARCHAR, Name LONGVARCHAR, mtime LONGVARCHAR, atime LONGVARCHAR, ctime LONGVARCHAR, FileSize LONGVARCHAR, DriveType LONGVARCHAR, Path LONGVARCHAR);");
+
+      String sql_query;
+
+      //Console.WriteLine("[+] lnk_csv path : {0}", lnk_csv.Name());
+      while(lnk_csv.More()){
+        String union_insert_q = "insert into App_Documents (Viewer, Name, mtime, atime, ctime, FileSize, DriveType, Path) values ('";
+        String line = "";
+        lnk_csv.ReadString(line, -1, "\n");
+        if(i==0){
+          i++;
+          continue;
+        }
+
+        String obj = line.SubString(0,line.Find("\t"));
+        String time = line.SubString(line.Find("\t")+1,-1);
+        //int file_size = int::Convert(time.SubString(0, time.Find("\t")),int::DECIMAL);
+        String file_size = time.SubString(0, time.Find("\t"));
+        time = time.SubString(time.Find("\t")+1,-1);
+        String drive_type = time.SubString(0,time.Find("\t"));
+        time = time.SubString(time.Find("\t")+1,-1);
+        String mtime = time.SubString(0,time.Find("\t"));
+        time = time.SubString(time.Find("\t")+1,-1);
+        String atime = time.SubString(0,time.Find("\t"));
+        time = time.SubString(time.Find("\t")+1,-1);
+        String ctime = time.SubString(0,time.Find("\t"));
+        time = time.SubString(time.Find("\t")+1,-1);
+        String base_path = time.SubString(0,time.Find("\t"));
+
+
+        String ext = obj.GetFileExt();
+        ext.ToLower();
+
+        if(ext == "lnk")
+          obj.ReplaceExtension("");
+
+        String viewer = "";
+        //Console.WriteLine(obj);
+        String query = obj + "\t" + file_size + "\t" + drive_type + "\t" +  mtime + "\t" + atime + "\t" + ctime + "\t" + base_path + "\t";
+        
+        if(cmp_lnk_recent(pp_list, obj, base_path)){
+          viewer = "PowerPoint";
+          pp.WriteLine(query);
+          sql_query = "insert into powerpoint(Name, FileSize, DriveType, mtime, atime, ctime, local_path) values(\'" + obj + "\'," + file_size + ",\'" + drive_type + "\',\'" + mtime + "\',\'" + atime + "\',\'" + ctime + "\',\'" + base_path + "\');";
+          //cmd.ExecuteNonQuery(sql_query);
+          union_insert_q += viewer + "','" + obj +  "','" + mtime + "','" + atime + "','" + ctime + "','" + file_size + "','" + drive_type + "','" + base_path + "');";
+          new RecentDocListClass(RD_dialog.List, viewer, obj, mtime, atime, ctime, file_size, drive_type, base_path);
+          cmd.ExecuteNonQuery(union_insert_q);
+        }
+        else if(cmp_lnk_recent(word_list, obj, base_path)){
+          viewer = "Word";
+          word.WriteLine(query);
+          sql_query = "insert into word(Name, FileSize, DriveType, mtime, atime, ctime, local_path) values(\'" + obj + "\'," + file_size + ",\'" + drive_type + "\',\'" + mtime + "\',\'" + atime + "\',\'" + ctime + "\',\'" + base_path + "\');";
+          //cmd.ExecuteNonQuery(sql_query);
+          union_insert_q += viewer + "','" + obj +  "','" + mtime + "','" + atime + "','" + ctime + "','" + file_size + "','" + drive_type + "','" + base_path + "');";
+          new RecentDocListClass(RD_dialog.List, viewer, obj, mtime, atime, ctime, file_size, drive_type, base_path);
+          cmd.ExecuteNonQuery(union_insert_q);
+        }
+        else if(cmp_lnk_recent(excel_list, obj, base_path)){
+          viewer = "Excel";
+          excel.WriteLine(query);
+          sql_query = "insert into excel(Name, FileSize, DriveType, mtime, atime, ctime, local_path) values(\'" + obj + "\'," + file_size + ",\'" + drive_type + "\',\'" + mtime + "\',\'" + atime + "\',\'" + ctime + "\',\'" + base_path + "\');";
+          //cmd.ExecuteNonQuery(sql_query);
+          union_insert_q += viewer + "','" + obj +  "','" + mtime + "','" + atime + "','" + ctime + "','" + file_size + "','" + drive_type + "','" + base_path + "');";
+          new RecentDocListClass(RD_dialog.List, viewer, obj, mtime, atime, ctime, file_size, drive_type, base_path);
+          cmd.ExecuteNonQuery(union_insert_q);
+        }
+        else if(cmp_lnk_recent(hwp_list, obj, base_path)){
+          viewer = "Hangul";
+          hwp.WriteLine(query);
+          sql_query = "insert into hwp(Name, FileSize, DriveType, mtime, atime, ctime, local_path) values(\'" + obj + "\'," + file_size + ",\'" + drive_type + "\',\'" + mtime + "\',\'" + atime + "\',\'" + ctime + "\',\'" + base_path + "\');";
+          //cmd.ExecuteNonQuery(sql_query);
+          union_insert_q += viewer + "','" + obj +  "','" + mtime + "','" + atime + "','" + ctime + "','" + file_size + "','" + drive_type + "','" + base_path + "');";
+          new RecentDocListClass(RD_dialog.List, viewer, obj, mtime, atime, ctime, file_size, drive_type, base_path);
+          cmd.ExecuteNonQuery(union_insert_q);
+        }
+        else if(cmp_lnk_recent(adobe_list, obj, base_path)){
+          viewer = "AdobeReader";
+          adobe.WriteLine(query);
+          sql_query = "insert into adobe(Name, FileSize, DriveType, mtime, atime, ctime, local_path) values(\'" + obj + "\'," + file_size + ",\'" + drive_type + "\',\'" + mtime + "\',\'" + atime + "\',\'" + ctime + "\',\'" + base_path + "\');";
+          //cmd.ExecuteNonQuery(sql_query);
+          union_insert_q += viewer + "','" + obj +  "','" + mtime + "','" + atime + "','" + ctime + "','" + file_size + "','" + drive_type + "','" + base_path + "');";
+          new RecentDocListClass(RD_dialog.List, viewer, obj, mtime, atime, ctime, file_size, drive_type, base_path);
+          cmd.ExecuteNonQuery(union_insert_q);
+        }
+
+
+        //Console.WriteLine(sql_query);
+      }
+      lnk_csv.Close();
+      pp.Close();
+      word.Close();
+      excel.Close();
+      hwp.Close();
+      adobe.Close();
+    }
+
+  void print_str_list(StringArr str_arr){
+        for(int i=0;i<str_arr.Count();i++)
+            Console.WriteLine(str_arr[i]);
+  }
+
+  void str_cmp_add(StringArr str_arr, String target){
+      bool flag = true;
+      for(int i=0;i<str_arr.Count();i++){
+          if(target == str_arr[i]){
+              flag = false;
+              break;
+          }
+      }
+      if(flag)
+          str_arr.Add(target);
+  }
+
+  void recent_doc(EntryClass e, String reg_path, StringArr list){
+        RegistryClass reg(e);
+        RegValueClass values();
+        RegCommandClass::Keys key = RegCommandClass::HKEY_CURRENT_USER;
+        RegCommandClass cmd();
+
+        String str_num, name, result;
+        int num = 1;
+        while(1){
+
+            if(reg_path.Contains("Office")){
+                str_num = String::FormatInt(num);
+                name = "Item " + str_num;
+            }
+            else if(reg_path.Contains("Hnc")){
+                str_num = String::FormatInt(num-1);
+                name = "file" + str_num;
+            }
+            else if(reg_path.Contains("Adobe")){
+                str_num = String::FormatInt(num);
+                name = "\\c" + str_num;
+                reg_path += name;
+                name = "tDIText";
+            }
+            num += 1;
+            //Console.WriteLine("reg path : {0}\tname : {1}",reg_path, name);
+            new RegCommandClass(cmd, name, RegCommandClass::READVALUE, key, reg_path, name, 0, 1);
+            if(reg.Run(cmd, values)){
+                forall(RegValueClass cmd_name in values){
+                    MemoryFileClass mf();
+                    if(mf.Open(8, FileClass::WRITE)){
+                        mf.Seek(0);
+                        if(cmd_name.GetData(mf)){
+                            mf.Seek(0);
+                            mf.ReadString(result);
+                            //Console.WriteLine(result);
+                            if(result.Contains("Unable to open registry")) return;
+                            if(result != "Cannot read value")
+                                str_cmp_add(list, result.GetFilename2());
+                        }
+                    }
+                }
+            }
+            else{
+              break;
+            }
+            if(result == "Cannot read value") {
+                //Console.WriteLine(result);
+                //print_str_list(list);
+                break;
+            }
+        }
+    }
+
+    void pp_doc(EntryClass e, String path, StringArr list){
+        String reg_path1 = "Software\\Microsoft\\Office\\13.0\\PowerPoint\\File MRU";
+        String reg_path2 = "Software\\Microsoft\\Office\\14.0\\PowerPoint\\File MRU";
+        String reg_path3 = "Software\\Microsoft\\Office\\15.0\\PowerPoint\\File MRU";
+        String reg_path4 = "Software\\Microsoft\\Office\\16.0\\PowerPoint\\File MRU";
+        Console.WriteLine("\n[+] PowerPoint Recent Files");
+        recent_doc(e, reg_path1, list);
+        recent_doc(e, reg_path2, list);
+        recent_doc(e, reg_path3, list);
+        recent_doc(e, reg_path4, list);        
+    }
+
+    void word_doc(EntryClass e, String path, StringArr list){
+        String reg_path1 = "Software\\Microsoft\\Office\\13.0\\Word\\File MRU";
+        String reg_path2 = "Software\\Microsoft\\Office\\14.0\\Word\\File MRU";
+        String reg_path3 = "Software\\Microsoft\\Office\\15.0\\Word\\File MRU";
+        String reg_path4 = "Software\\Microsoft\\Office\\16.0\\Word\\File MRU";
+        Console.WriteLine("\n[+] Word Recent Files");
+        recent_doc(e, reg_path1, list);
+        recent_doc(e, reg_path2, list);
+        recent_doc(e, reg_path3, list);
+        recent_doc(e, reg_path4, list);
+    }
+
+    void excel_doc(EntryClass e, String path, StringArr list){
+        String reg_path1 = "Software\\Microsoft\\Office\\13.0\\Excel\\File MRU";
+        String reg_path2 = "Software\\Microsoft\\Office\\14.0\\Excel\\File MRU";
+        String reg_path3 = "Software\\Microsoft\\Office\\15.0\\Excel\\File MRU";
+        String reg_path4 = "Software\\Microsoft\\Office\\16.0\\Excel\\File MRU";
+        Console.WriteLine("\n[+] Excel Recent Files");
+        recent_doc(e, reg_path1, list);
+        recent_doc(e, reg_path2, list);
+        recent_doc(e, reg_path3, list);
+        recent_doc(e, reg_path4, list);
+    }
+
+    void hwp_doc(EntryClass e, String path, StringArr list){
+        String reg_path = "Software\\Hnc\\Hwp\\9.0\\HwpFrame_KOR\\RecentFile";
+        String reg_path2 = "Software\\Hnc\\Hwp\\9.0\\HwpFrame\\RecentFile";
+        Console.WriteLine("\n[+] Hwp Recent Files");
+        recent_doc(e, reg_path, list);
+        recent_doc(e, reg_path2, list);
+    }
+
+    void adobe_doc(EntryClass e, String path, StringArr list){
+        String reg_path;
+        reg_path = "Software\\Adobe\\Acrobat Reader\\DC\\AVGeneral\\cRecentFiles";
+        Console.WriteLine("\n[+] Adobe Recent Files");
+        recent_doc(e, reg_path, list);
+    }
+
+  virtual void Run(){
+    while(IsRunning()){
+      int StatusWindowMax;
+      int StatusWindowStatus;
+      int OnePercent;
+
+      for(ItemIteratorClass iter(c,0,ItemIteratorClass::CURRENTVIEW_SELECTED); DeviceClass dev = iter.GetNextDevice();){
+        EntryClass entryRoot = dev.GetRootEntry();
+        StatusWindowMax = entryRoot.CountAll(2, NodeClass::COUNTNODES | NodeClass::COUNTFOLDERS | NodeClass::COUNTRECURSIVE);
+        Console.WriteLine(StatusWindowMax);
+      }
+
+      RD_dialog.StatusWindow.SetLimit("Progress Status", StatusWindowMax);
+      if(StatusWindowMax < 100) OnePercent = 1;
+      else OnePercent = StatusWindowMax / 100;
+
+      RD_dialog.time_reset = true;
+      RD_dialog.time_check = true;
+      RD_dialog.List.Close();
+      RD_dialog.TreeControl.Input();
+
+      String path = c.ExportFolder() + "\\link_files";
+        String lnk_path = path + "\\lnk_parse.csv";
+        ConnectionClass conn = LocalMachine;
+        conn.CreateFolder(path, ConnectionClass::CREATEFOLDERALL);
+        conn.Close();
+
+      StringArr pp_list(), word_list(), excel_list(), hwp_list(), adobe_list();
+
+        StringArr lnk();
+        IntArr cnt();
+
+        uint num = 0;
+        String str_num;
+        String name;
+
+        LocalFileClass db = new LocalFileClass();
+        SQLiteClass sql = new SQLiteClass();
+        db.Open("C:\\TimeLineArtifacts.sqlite", FileClass::APPEND);
+        sql.Open(db, SQLiteClass::SQLITE_OPEN_READWRITE);
+
+        LocalFileClass lf = new LocalFileClass();
+        lf.Open(lnk_path, FileClass::WRITE + FileClass::TEXT);        
+        lf.WriteLine("FILE NAME\tFILE SIZE\tDRIVE TYPE\tMTIME\tATIME\tCTIME\tLOCAL PATH\t");
+
+      for(ItemIteratorClass i(c,0,ItemIteratorClass::CURRENTVIEW_SELECTED); ItemClass item = i.GetNextItem();){
+        if((StatusWindowStatus++ % OnePercent) == 0){
+          RD_dialog.StatusWindow.SetPosition(StatusWindowStatus);
+        }
+
+        EntryClass e = EntryClass::TypeCast(item);
+
+        if(e.IsVolume()){
+                //RegistryClass reg(e);
+                Console.WriteLine("[+] recent document export");
+                pp_doc(e, path, pp_list);
+                word_doc(e, path, word_list);
+                excel_doc(e, path, excel_list);
+                hwp_doc(e, path, hwp_list);
+                adobe_doc(e, path, adobe_list);
+
+                Console.WriteLine("[+} PP");print_str_list(pp_list);
+                Console.WriteLine("[+} Word");print_str_list(word_list);
+                Console.WriteLine("[+} Excel");print_str_list(excel_list);
+                Console.WriteLine("[+} HWP");print_str_list(hwp_list);
+                Console.WriteLine("[+} ADOBE");print_str_list(adobe_list);
+
+                Console.WriteLine("[+] recent document export done\n");
+        }
+        String ext = e.Extension();
+        ext.ToLower();
+
+        if(ext == "lnk"){
+            EntryFileClass ef();
+            ef.Open(e);
+
+            DateClass obj_ctime(), obj_mtime(), obj_atime();
+
+            String ctime, mtime, atime;
+            ctime = e.Created().GetString("yyyy/MM/dd", "HH:mm:ss", -9*3600);
+            mtime = e.Written().GetString("yyyy/MM/dd", "HH:mm:ss", -9*3600);
+            atime = e.Accessed().GetString("yyyy/MM/dd", "HH:mm:ss", -9*3600);
+
+            ef.Seek(0x1c);
+            ef.ReadWinDate(obj_ctime);
+            ef.ReadWinDate(obj_atime);
+            ef.ReadWinDate(obj_mtime);
+
+            int file_size = ef.ReadBinaryInt(4);
+
+            int offset = 0x4c;
+            ef.Seek(offset);
+            int IDListSize = ef.ReadBinaryInt(2);
+
+            offset += IDListSize + 2;
+            ef.Seek(offset);
+
+            //Console.WriteLine("lnk offset: {0}",ef.GetPos());
+            int local_info_size = ef.ReadBinaryInt(4);
+            int local_info_hdr_size = ef.ReadBinaryInt(4);
+            int location_flag = ef.ReadBinaryInt(4);
+            int vol_offset = ef.ReadBinaryInt(4);
+            int local_path_offset = ef.ReadBinaryInt(4);
+            ef.Skip(8), int local_path_uni_offset = ef.ReadBinaryInt(4);
+
+            String local_path, local_path_uni, drive_type;
+            //Volume ID
+            if(vol_offset != 0){
+                ef.Seek(offset + vol_offset);
+                int vol_size = ef.ReadBinaryInt(4);
+                int drive = ef.ReadBinaryInt(4);
+                if(drive == 0) drive_type = "UNKNOWN";
+                else if(drive == 1) drive_type = "NO_ROOT";
+                else if(drive == 2) drive_type = "EXTERNAL_DEV";
+                else if(drive == 3) drive_type = "FIXED_DEV";
+                else if(drive == 4) drive_type = "NETWORK";
+                else if(drive == 5) drive_type = "CD-ROM";
+                else if(drive == 6) drive_type = "RAM_DISK";
+
+                int serial_num = ef.ReadBinaryInt(4);
+            }
+            if(local_path_offset != 0){
+              ef.SetCodePage(CodePageClass::ANSI);
+                ef.Seek(offset + local_path_offset);
+                ef.ReadString(local_path);
+                if(local_path_uni_offset){
+                    ef.Seek(offset + local_path_uni_offset);
+                    ef.ReadString(local_path_uni);
+                }
+            }
+
+            /*Console.WriteLine("###################################################");
+            Console.WriteLine("file name : {0}", e.Name());
+            Console.WriteLine("file size : {0}", file_size);
+            Console.WriteLine("drive type : {0}", drive_type);
+            Console.WriteLine("object ctime : {0}", obj_ctime.GetString("yyyy/MM/dd", "hh:mm:ss tt", -9*3600));
+            Console.WriteLine("object atime : {0}", obj_atime.GetString("yyyy/MM/dd", "hh:mm:ss tt", -9*3600));
+            Console.WriteLine("object mtime : {0}", obj_mtime.GetString("yyyy/MM/dd", "hh:mm:ss tt", -9*3600));
+            Console.WriteLine("local path : {0}", local_path);
+            Console.WriteLine("local path unicode : {0}", local_path_uni);*/
+            String query = e.Name() + "\t" + file_size + "\t" + drive_type + "\t" + mtime + "\t" + atime + "\t" + ctime + "\t" + local_path + "\t";
+            lf.WriteLine(query);
+        }
+
+      }
+      lf.Close();
+
+      recent_lnk(path, lnk_path, pp_list, word_list, excel_list, hwp_list, adobe_list, sql);
+
+      sql.Close();
+      db.Close();
+
+      SystemClass::Sleep(500);
+      RD_dialog.TreeControl.Input();
+      foreach(RecentDocListClass n in RD_dialog.List){
+        RecentDocListClass(RD_dialog.CopyList, n.viewer, n.file, n.mtime, n.atime, n.ctime, n.filesize, n.driveType, n.path);
+      }
+      RD_dialog.time_check = false;
+      RD_dialog.Semaphore.Release();
+      break;
+    }
+    //SystemClass::Message(SystemClass::ICONINFORMATION, "Notice", "RecentDoc Export Finish");
+  }
+
+}
+
+
+class RecentDocDialogClass : DialogClass{
+  RecentDocThreadClass    RD_thread;
+  ThreadClass::SemaphoreClass Semaphore;
+  RecentDocListClass      List, CopyList;
+  RecentDocHandlerClass   Handler;
+  TreeTableEditClass      TreeControl;
+  StringEditClass       FilterControl;
+  String                      filter_name;
+  StaticTextClass       filter_title, RunningTime;
+  ButtonClass         button_search;
+  bool            b_evtx;
+  bool            time_check, time_reset;
+  int             hour, minute, second;
+  CaseClass         c;
+  StatusWindowClass     StatusWindow;
+
+  RecentDocDialogClass(DialogClass parent, MainClass main, CaseClass c, BookmarkClass folder, int TreeViewSize):
+  DialogClass(parent, "Recent Documents"),
+  c=c;
+
+  StatusWindow(this, "Progress Status", 5,5, 240, 5, 0),
+  button_search(this, "Search", 250, 15, 60, DEFAULT, 0),
+  RunningTime(this, "", 315, 17, 40, DEFAULT, 0),
+
+  FilterControl(this, "Keyword Search", 360, 5, 300, DEFAULT, 0, filter_name, 500, 0),
+
+  List(null, "List"),
+  CopyList(null, ""),
+  Handler(this, "Some Custom Class", 0, typeof(RecentDocListClass)),
+
+  TreeControl(this, "Recent Document", 5, 30, 750, TreeViewSize, 0, List, ContextClass::CANCHECK | ContextClass::ALLFIELDS | ContextClass::CANDELETENODE, ListEditClass::TABLEDEFAULT, Handler),
+  RD_thread(this, "", c, folder)
+  {
+    TreeControl.SetView(ContextClass::PANETABLE);
+    Semaphore.Create(1,1);
+  }
+
+  virtual void ChildEvent(const EventClass &event){
+    if(button_search.Matches(event)){
+      if(Semaphore.Wait(10)){
+        RD_thread.Start();
+      }
+      else{
+        SystemClass::Message(SystemClass::ICONINFORMATION, "Warning", "Still Processing...");
+        return;
+      }
+    }
+
+    if(FilterControl.Matches(event)){
+      SearchClass search();
+      search.AddKeyword(FilterControl.GetText(), KeywordClass::UNICODE);
+
+      List.Close();
+      TreeControl.Input();
+
+      int CopyList_Count = CopyList.CountAll(0, COUNTNODES);
+
+      if(FilterControl.GetText() == ""){
+        foreach(RecentDocListClass n in CopyList){
+          new RecentDocListClass(List, n.viewer, n.file, n.mtime, n.atime, n.ctime, n.filesize, n.driveType, n.path);
+        }
+      }
+      else{
+        foreach(RecentDocListClass n in CopyList){
+          if(search.Find(n.file) == -1) continue;
+          new RecentDocListClass(List, n.viewer, n.file, n.mtime, n.atime, n.ctime, n.filesize, n.driveType, n.path);
+        }
+      }
+      TreeControl.Input();
+    }
+    DialogClass::ChildEvent(event);
+  }
+
+  virtual void Setup(){
+    StatusWindow.SetLimit("Progress Status", 0);
+    SetTimer(1000);
+  }
+
+  virtual void TimerEvent(uint timerId){
+    if(time_reset){
+      hour=0;
+      minute=0;
+      second=0;
+      time_reset = false;
+    }
+    if(time_check){
+      second++;
+      if(second >= 60){
+        second=0;
+        minute++;
+      }
+      if(minute >= 60){
+        minute=0;
+        hour++;
+      }
+      RunningTime.SetText(String::Format("{0}:{1}:{2} ", hour, minute, second));
+    }
+    else{
+      RunningTime.SetText(String::Format("{0}:{1}:{2} ", hour, minute, second));
+    }
+  }
+
+  virtual bool CanClose(){
+    return false;
+  }
+}
+
+

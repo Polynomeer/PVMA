@@ -1,0 +1,94 @@
+include "Win_SystemInfo"
+include "Win_FileMetaData"
+include "Win_UserAccount"
+include "Win_PrefetchFile"
+include "Win_LinkFile"
+include "Win_PowerLogOnOff"
+include "Win_RecycleBin"
+include "Win_USBInfo"
+
+include "Win_RecentDocuments"
+include "Win_WebDownloads"
+include "Win_WebVisitKeyword"
+include "Win_TimeLine"
+
+class MainClass;
+
+class ExportDialogClass: DialogClass {
+  PathEditClass ExportPath;
+
+   ExportDialogClass(DialogClass parent, String &exportPath) :
+    DialogClass(parent, "Choose the export path "),
+    ExportPath  (this, "Location to save the Exported/Extracted File", START, START, 200, DEFAULT, 0, exportPath,  PathEditClass::REQUIRED | PathEditClass::FILECREATE)
+	  {
+	  }
+}
+
+class MainDialogClass: DialogClass {
+
+      SysInfoDialogClass             SysInfoDialog;
+	  FileDialogClass		FileDialog;
+	  AccountDialogClass		AccountDialog;
+	  RecycleDialogClass     RecycleDialog;
+	  LogonDialogClass       LogonDialog;
+      PrefetchDialogClass    PrefetchDialog;
+	  LinkDialogClass         LinkDialog;
+	  USBDialogClass 		USBDialog;
+      WebDialogClass         WebDialog; 
+      DownloadsDialogClass        Downloads;
+      RecentDocDialogClass          RecentDocDialog;
+      TimeLineDialogClass   TimeLineDialog;	  
+	  
+	
+	 MainDialogClass(DialogClass parent, MainClass main,CaseClass &c, DeviceClass dev, EntryClass e,  BookmarkClass folder, int heightTreeView) :
+     DialogClass(parent, "Plain View of Multi Artifacts"),
+     SysInfoDialog(this, main, c, e , folder ),
+	 AccountDialog(this,main,c,folder, heightTreeView),
+	 FileDialog(this, main, c, folder, heightTreeView),
+     RecycleDialog(this, main, c, folder, heightTreeView),
+	 LogonDialog(this, main, c, folder, heightTreeView),
+	 PrefetchDialog(this, main, c, folder, heightTreeView),
+	 LinkDialog(this, main, c, folder, heightTreeView),
+	 USBDialog(this, main, c, folder, heightTreeView),
+     WebDialog(this, main, c, folder, heightTreeView), 
+     Downloads(this, main, c, folder, heightTreeView),
+     RecentDocDialog(this, main, c, folder, heightTreeView),
+	 TimeLineDialog(this, main, c, folder, heightTreeView)
+    {
+       SetViewOptions(VIEWOK|VIEWSIZE|VIEWMAX);
+       CloseOnly();
+    }
+}
+
+class MainClass {
+  void Main(CaseClass c) {
+	  SystemClass::ClearConsole(SystemClass::SHOWCONSOLE);
+      if (c) {
+          DateClass CurrentDate();
+          CurrentDate.Now();
+          int heightTreeView = 300;
+
+          for(ItemIteratorClass iter(c, 0, ItemIteratorClass::CURRENTVIEW); EntryClass entry = iter.GetNextEntry();) {
+              if (entry.IsVolume()) {
+                  VolumeClass vol = entry.GetVolume();
+				  DeviceClass dev = entry.GetDevice();
+                  NameValueClass volume();
+                  if (vol) {
+                       if(vol.WinDir().Find("Windows") != -1) {
+                            NameValueClass(volume, entry.ItemPath(),0, entry.GetKey());
+                            BookmarkClass folder(c.BookmarkRoot(), "WindowsAtifacts   " + CurrentDate.GetString("yyyy/MM/dd", "hh:mm:ss tt", -9*3600), NodeClass::FOLDER);
+                            MainDialogClass dialog(null, this, c, dev, entry, folder, heightTreeView);
+                            dialog.Execute();
+                            break;
+					   } else
+						   Console.WriteLine("Error: Volume does not include \"Windows\" ");
+                    } else
+						Console.WriteLine("Error: Volume is not found.");
+				} //else Console.WriteLine("This entry is not Volume. Entry is {0}", entry.Name());
+              } //for loop close
+     }
+     else
+         SystemClass::Message(SystemClass::MBOK, Lang::T0028, Lang::T0179);
+  }
+
+}

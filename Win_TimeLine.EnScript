@@ -1,0 +1,2315 @@
+class MainClass;
+
+class TimeLineWindow: WindowClass {
+  String Code;
+  RectClass   Rect, RectStr, RectStr1, RectStr2;
+  //ButtonClass	help_button, findMe_button;
+  
+  TimeLineWindow(WindowClass parent, int x, int y, int w, int h, const String &code):
+    WindowClass(parent, "", x, y, w, h, NOHIDESEL),
+    Code = code,
+    RectStr(30, 70, 600, 100),
+	RectStr1(60, 200, 1000, 100),
+	RectStr2(90, 350, 1400, 100)
+	//help_button(this, "Help", 700, 10, 30, 10, NOHIDESEL),
+	//findMe_button(this, "Find Me", 690, 300, 30, 10, NOHIDESEL)
+  {
+  }
+
+	/*virtual void ChildEvent(const EventClass &event){
+		if(help_button.Matches(event)){
+		    SystemClass::Message(ICONINFORMATION, "Notice", "Help Clicked!!");			
+		}
+		if(findMe_button.Matches(event)){
+		    SystemClass::Message(ICONINFORMATION, "Notice", "Find me Clicked!!");			
+		}		
+	} */ 
+  
+  virtual void PaintEvent(GraphicsClass g) {
+    RectClass a = g.ClientArea();
+	g.Fill(a, ColorClass::Black); //paint background color	  
+	  //g.Fill(a, ColorClass::White); //paint background color	  
+    g.Fill(Rect, ColorClass::Black);
+    FontClass font(null, "", FontClass::BOLD, "Times New Roman", 850);
+    g.SetFont(font);
+    g.DrawString(String::Format("KITRI BoB Shellock"), RectStr, DRAWTOP, ColorClass::White);
+	 
+	FontClass font1(null, "", FontClass::BOLD, "Times New Roman", 1200);
+    g.SetFont(font1);
+	g.DrawString(String::Format("Plain View of Multi Artifacts"), RectStr1, DRAWTOP, ColorClass::White);
+	
+	FontClass font2(null, "", FontClass::BOLD, "Times New Roman", 1600);
+    g.SetFont(font2);
+	g.DrawString(String::Format("Timeline Artifacts View"), RectStr2, DRAWTOP, ColorClass::White);	
+  //DrawString (const String &s, const RectClass &r, uint Options=0, ColorClass fore=ColorClass::Default, ColorClass back=ColorClass::Null)
+
+  }
+  
+}
+
+class TimeLineDialogClass;
+
+class TimeLineThreadClass: ThreadClass{
+	TimeLineDialogClass	TimeLine_dialog;
+	CaseClass			c;
+	BookmarkClass		folder;
+
+	TimeLineThreadClass(TimeLineDialogClass TimeLine_dialog, const String &name, CaseClass c, BookmarkClass folder):
+	ThreadClass(null, name),
+	c=c,
+	folder = folder,
+	TimeLine_dialog = TimeLine_dialog
+	{		
+	}
+
+	bool f_flag;
+	typedef String [] StringArr;
+	typedef int [] IntArr;
+
+	void FileDeleted(ItemClass item, SQLiteClass::CommandClass cmd){				
+		EntryClass entry = EntryClass::TypeCast(item); //type cast to ItemClass to use the methods which included in ItemClass
+		String path	= item.GetOriginalPath();
+		String fileProperty="None"; 
+		if(item.Extension()){
+			if(entry.IsDeleted() || path.Contains("$Recycle") && !entry.IsHidden()){
+				fileProperty="Deleted";
+				cmd.ExecuteNonQuery("INSERT INTO File_Deleted (FileName, FileExt, FileCategory,FileProperty, FileSize, AccessedTime, CreatedTime, WrittenTime, FilePath) VALUES ('" + 									item.Name() + "', '" +  item.Extension() + "', '" +  ItemClass::Categories::SourceText(entry.Category()) + "', '" +  fileProperty + "', '" +  item.LogicalSize() + "', '" +  item.Accessed().GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600) + "', '" + item.Created().GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600) + "', '" +  item.Written().GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600) + "', '" +  entry.Deleted().GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600) + "');");
+			}
+		}
+
+		return;
+	}
+	
+	void USBEventLog(EntryClass e, SQLiteClass::CommandClass cmd){
+		EntryFileClass ef();
+
+		ParserClass::EventLogParserClass EventParser = new ParserClass::EventLogParserClass();
+		ParserClass::EvtxArtifactClass EvtxArtifactList = new ParserClass::EvtxArtifactClass();
+
+		bool isRun = false;
+
+		if(e.ItemPath().Find("Windows\\System32\\winevt\\Logs") != -1 ) {
+			if( (e.Name() == "Microsoft-Windows-DriverFrameworks-UserMode%4Operational.evtx") ) {
+				if(ef.Open(e) ) {
+					//ef.SetCodePage(CodePageClass::ANSI);
+					 EventParser.Run(ef);
+					 isRun = true;
+					 Console.WriteLine("Event Parser starts running..");
+				}
+			}
+	    }
+	    if(!isRun){
+	    	//Console.WriteLine("Error: Failed to export USB Eventlog");
+	    	return;
+	    }		
+
+	    String event_channel, event_computer, event_id, event_keyword, event_level, event_opcode, event_processID, event_qualifiers, event_recordNumber,
+				  event_sid, event_sourceEventName, event_sourceGuid, event_sourceName, event_task, event_theadID, event_timeGenerated, event_timeWritten, event_version, event_xmlEventData,
+				  event_time, event_xml, event_category;
+
+		  EvtxArtifactList = EventParser.EvtxArtifacts();
+		  ParserClass::EvtxArtifactClass preEvtx;
+		  		  
+		  
+		  foreach(ParserClass::EvtxArtifactClass evtx in EvtxArtifactList){ //get the first event
+			preEvtx=evtx;
+			break;
+		  }
+		  int count=0;
+		  String vendor, product, revision, serialNum, lifeTime, state;
+
+		  foreach(ParserClass::EvtxArtifactClass evtx in EvtxArtifactList){
+			  /*if( (StatusWindowStatus++ % StatusPercent) == 0 ) {
+				   USBEventLog_dialog.StatusWindow.SetPosition(StatusWindowStatus);
+			  }	*/
+			 
+			//Console.WriteLine(StatusWindowStatus+" / "+StatusWindowMax);			  
+				if(preEvtx.TimeGenerated()==evtx.TimeGenerated() || preEvtx.TimeWritten()==evtx.TimeWritten()){	//compare preccesor event and currunt event
+					count++; //same device, so count up
+				} else{						
+					//Console.WriteLine("Event Changed!!");
+					if(count==25 && preEvtx.TimeGenerated()!=evtx.TimeGenerated()){
+						state="Mounted";
+						Console.WriteLine(preEvtx.TimeGenerated().GetString()+" : "+product+" was mounted.");
+						cmd.ExecuteNonQuery("INSERT INTO USB_EventLog (Vendor, Product, State, GeneratedTime, WrittenTime, FirmwareRevision, SerialNumber, LifeTimeGUID, SourceGUID, Source, Computer, SID) VALUES ('" + vendor + "', '" + product + "', '" + state + "', '" + event_timeGenerated + "', '" + event_timeWritten + "', '" + revision + "', '" + serialNum + "', '" + lifeTime + "', '" + event_sourceGuid + "', '" + event_sourceName + "', '" + event_computer + "', '" + event_sid + "');");						
+						
+					} else if(count==8 && preEvtx.TimeGenerated()!=evtx.TimeGenerated()){
+						state="Unmounted";
+						Console.WriteLine(preEvtx.TimeGenerated().GetString()+" : "+product+" was unmounted.");
+						cmd.ExecuteNonQuery("INSERT INTO USB_EventLog (Vendor, Product, State, GeneratedTime, WrittenTime, FirmwareRevision, SerialNumber, LifeTimeGUID, SourceGUID, Source, Computer, SID) VALUES ('" + vendor + "', '" + product + "', '" + state + "', '" + event_timeGenerated + "', '" + event_timeWritten + "', '" + revision + "', '" + serialNum + "', '" + lifeTime + "', '" + event_sourceGuid + "', '" + event_sourceName + "', '" + event_computer + "', '" + event_sid + "');");						
+					}
+					count=1; //reset count
+				}
+				  //event_channel = evtx.Channel();
+				  event_computer = evtx.Computer();
+				  event_id = evtx.EventId();
+				  event_sid = evtx.Sid();
+				  event_sourceEventName = evtx.SourceEventName();
+				  event_sourceGuid = evtx.SourceGuid();
+				  event_sourceName = evtx.SourceName();
+				  //event_theadID = evtx.ThreadID();
+				  event_timeGenerated =  evtx.TimeGenerated().GetString("yyyy/MM/dd","HH:mm:ss", -9*3600);
+				  event_timeWritten = evtx.TimeWritten().GetString("yyyy/MM/dd","HH:mm:ss", -9*3600);		
+			
+				 int offset,startOffset, endOffset ;
+				  if( (offset = evtx.XmlEventData().Find("DISK&") ) > 0) {
+						int tmpOffset =  evtx.XmlEventData().Find("lifetime") - 3;
+						String temp = evtx.XmlEventData().SubString(offset, tmpOffset - offset);
+						startOffset = temp.Find("VEN_") + 4;
+						endOffset = temp.Find("&PROD");
+						vendor = temp.SubString(startOffset, endOffset - startOffset);
+						startOffset = temp.Find("PROD_") + 5;
+						endOffset = temp.Find("&REV");
+						product = temp.SubString(startOffset, endOffset - startOffset);
+						startOffset = temp.Find("REV_") + 4;
+						endOffset = temp.Find("#");
+						revision = temp.SubString(startOffset, endOffset - startOffset);
+						startOffset = temp.Find("#") + 1;
+						endOffset = temp.Find("&0");
+						serialNum = temp.SubString(startOffset, endOffset - startOffset);							
+				  }
+				  if( (offset = evtx.XmlEventData().Find("lifetime") ) > 0) {
+						int tmpOffset = evtx.XmlEventData().Find("xmlns:auto");
+						String temp = evtx.XmlEventData().SubString(offset, tmpOffset-offset);
+						startOffset = temp.Find("=\"{") + 2;
+						endOffset = temp.Find("}") + 1;
+						lifeTime = temp.SubString(startOffset, endOffset - startOffset) ;
+					}				
+				  preEvtx=evtx;
+		  }
+
+	}
+
+	void LogOn(EntryClass e, SQLiteClass::CommandClass cmd){
+		EntryFileClass ef();
+
+		ParserClass::EvtxArtifactClass  EvtxArtifact = new ParserClass::EvtxArtifactClass();
+        ParserClass::EventLogParserClass EventLogParser = new ParserClass::EventLogParserClass();
+
+		if(e.ItemPath().Find("System32\\winevt\\Logs") != -1){
+			if(e.Name() == "Security.evtx"){
+				if(ef.Open(e)){
+					EventLogParser.Run(ef);					
+				}
+			}
+		}
+
+
+       EvtxArtifact = EventLogParser.EvtxArtifacts();
+
+       foreach(ParserClass::EvtxArtifactClass evtx in EvtxArtifact) {            
+              DateClass generatedTime = evtx.TimeGenerated();
+              DateClass writtenTime = evtx.TimeWritten();
+              String targetUserName,SubjectDomainName,targetDomainName,targetLogonId,logonType,IpAddress,event;
+              int offset,startOffset, endOffset ;
+
+              if(evtx.EventId()==4647 | evtx.EventId()==4624  | evtx.EventId()==4634  )   {
+				  
+					if(evtx.EventId() == 4624) {
+                         event = "LogOn";
+                    } else {
+                         event = "LogOff";
+                    }
+					
+                    if( (offset = evtx.XmlEventData().Find("TargetUserName") ) > 0)
+                    {
+                         String temp = evtx.XmlEventData().SubString(offset,100);
+                         startOffset = temp.Find(">") + 1;
+                         endOffset = temp.Find("<");
+                         targetUserName = temp.SubString(startOffset, endOffset - startOffset) ;
+                    }
+                    if( (offset = evtx.XmlEventData().Find("SubjectDomainName") ) > 0)
+                    {
+                         String temp = evtx.XmlEventData().SubString(offset,100);
+                         startOffset = temp.Find(">") + 1;
+                         endOffset = temp.Find("<");
+                         SubjectDomainName = temp.SubString(startOffset, endOffset - startOffset) ;
+                    }
+                    if( (offset = evtx.XmlEventData().Find("TargetDomainName") ) > 0)
+                    {
+                         String temp = evtx.XmlEventData().SubString(offset,100);
+                         startOffset = temp.Find(">") + 1;
+                         endOffset = temp.Find("<");
+                         targetDomainName = temp.SubString(startOffset, endOffset - startOffset) ;
+                    }
+
+                    if( (offset = evtx.XmlEventData().Find("TargetLogonId") ) > 0)
+                    {
+                         String temp = evtx.XmlEventData().SubString(offset,100);
+                         startOffset = temp.Find(">") + 1;
+                         endOffset = temp.Find("<");
+                         targetLogonId = temp.SubString(startOffset, endOffset - startOffset) ;
+                    }
+                    if( (offset = evtx.XmlEventData().Find("LogonType") ) > 0)
+                    {
+                         String temp = evtx.XmlEventData().SubString(offset,100);
+                         startOffset = temp.Find(">") + 1;
+                         endOffset = temp.Find("<");
+                         logonType = temp.SubString(startOffset, endOffset - startOffset) ;
+                    }
+                    if( (offset = evtx.XmlEventData().Find("IpAddress") ) > 0)
+                    {
+                         String temp = evtx.XmlEventData().SubString(offset,100);
+                         startOffset = temp.Find(">") + 1;
+                         endOffset = temp.Find("<");
+                         IpAddress = temp.SubString(startOffset, endOffset - startOffset) ;
+                    }
+
+                    if( targetDomainName !="NT AUTHORITY" ) {
+                    	cmd.ExecuteNonQuery("INSERT INTO PC_LogOnOff (EventID, LogonID, User, Event, EventTime, NetworkAddress, LogonType, SID, GUID) VALUES ('" + evtx.EventId() + "', '" + targetLogonId + "', '" + targetUserName + "', '" + event + "', '" + generatedTime.GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600) + "', '" + IpAddress + "', '" + logonType + "', '" + evtx.Sid() + "', '" + evtx.SourceGuid() + "');");                          
+                    }
+
+              }
+       }
+	}
+
+	void PowerOn(EntryClass e, SQLiteClass::CommandClass cmd){
+		EntryFileClass ef();
+
+		ParserClass::EvtxArtifactClass  EvtxArtifact = new ParserClass::EvtxArtifactClass();
+        ParserClass::EventLogParserClass EventLogParser = new ParserClass::EventLogParserClass();
+
+		if(e.ItemPath().Find("System32\\winevt\\Logs") != -1){
+			if(e.Name() == "System.evtx"){
+				ef.Open(e);
+				EventLogParser.Run(ef);
+			}
+		}
+
+		EvtxArtifact = EventLogParser.EvtxArtifacts();
+
+       foreach(ParserClass::EvtxArtifactClass evtx in EvtxArtifact) {
+            
+              DateClass generatedTime = evtx.TimeGenerated();
+              String UserSid, Computer, State;
+              int offset,startOffset, endOffset ;
+
+              if(evtx.EventId()==12 | evtx.EventId()==13   )   {
+
+                  if( (offset = evtx.XmlEventData().Find("Security UserID") ) > 0)
+                  {
+                        String temp = evtx.XmlEventData().SubString(offset,100);
+                        startOffset = temp.Find("\"") + 1;
+                        endOffset = temp.Find("\" />");
+                        UserSid = temp.SubString(startOffset, endOffset - startOffset);
+                  }
+
+                  if( (offset = evtx.XmlEventData().Find("Computer") ) > 0)
+                  {
+                        String temp = evtx.XmlEventData().SubString(offset,100);
+                        startOffset = temp.Find(">") + 1;
+                        endOffset = temp.Find("<");
+                        Computer = temp.SubString(startOffset, endOffset - startOffset) ;
+                  }
+                  if(evtx.EventId() == 12 )
+                      State = "PowerOn";
+                  else if(evtx.EventId() == 13 )
+                      State = "PowerOff";
+				  cmd.ExecuteNonQuery("INSERT INTO PC_PowerOnOff (EventID, Computer, Event, EventTime, SID, GUID) VALUES ('" + evtx.EventId() + "', '" + Computer + "', '" + State + "', '" + generatedTime.GetString("yyyy/MM/dd","HH:mm:ss", -9*3600) + "', '" + UserSid + "', '" + evtx.SourceGuid() + "');");                  
+              }
+       }
+
+	}
+
+	void UserAccount(EntryClass e, SQLiteClass::CommandClass cmd){
+    	RegCommandClass cmds;
+		if(e.IsVolume()) {
+					RegistryClass reg(e);
+					Console.WriteLine("Registry On {0}", e.Name());
+
+					new RegCommandClass(cmds, "HKLM_SAM_USERS_NAME", RegCommandClass::READKEY, RegCommandClass::HKEY_LOCAL_MACHINE,
+						"SAM\\SAM\\Domains\\Account\\Users\\Names\\", "", 0, 1);
+
+					new RegCommandClass(cmds, "HKLM_USERS_RID", RegCommandClass::READKEY, RegCommandClass::HKEY_LOCAL_MACHINE,
+						"SAM\\SAM\\Domains\\Account\\Users\\", "", 0, 1);
+          
+          if(cmds == null) return;
+          
+					RegValueClass values();
+					if (reg.Run(cmds, values)) {
+						RegValueClass HKLM_SAM_USERS_NAME = values.Find("HKLM_SAM_USERS_NAME");
+						if (HKLM_SAM_USERS_NAME) {
+							
+
+							forall(RegValueClass n in HKLM_SAM_USERS_NAME) {
+								
+
+								String RID_1;
+								RID_1 = RID_1.FormatInt(n.Type(), int::HEX, 0, 0);
+
+								if (reg.Run(cmds, values)) {
+									RegValueClass HKLM_USERS_RID = values.Find("HKLM_USERS_RID");
+									if (HKLM_USERS_RID) {
+										String RID,
+										lastLogonTime,
+										pwdChangedTime,
+										expiredTime,
+										invalidLogonTime,
+										lastWrittenTime,
+										userPrivilege,
+										userPrivilege_tmp,
+										full_name,
+										fullName,
+										descript,
+										homeDir,
+										lmHash,
+										ntHash,
+										countryCodeStr,
+										activation,
+										passwordExpiredTime;
+										int LogonCount,
+										invalidLogonCount;
+										
+										forall(RegValueClass n1 in HKLM_USERS_RID) {
+											if (n1.Depth() == 2) {
+												RID = lastLogonTime = pwdChangedTime = expiredTime = invalidLogonTime =
+													lastWrittenTime = userPrivilege = userPrivilege_tmp = full_name =
+													fullName = descript = homeDir = lmHash = ntHash = countryCodeStr = activation =
+													passwordExpiredTime = "";
+												LogonCount = invalidLogonCount = 0;
+											}
+											if (n1.Name() == "F") {
+												MemoryFileClass mf();
+												RID = lastLogonTime = pwdChangedTime = expiredTime = invalidLogonTime = lastWrittenTime = userPrivilege = userPrivilege_tmp = full_name = fullName = descript = homeDir = lmHash = ntHash = countryCodeStr = "";
+												if (mf.Open(n1.GetSize(), FileClass::WRITE)) {
+													if (n1.GetData(mf)) {
+
+														DateClass d();
+														mf.Seek(8);
+														if (mf.ReadWinDate(d))
+															lastLogonTime = d.GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600); // last log on success time
+														mf.Seek(24);
+														if (mf.ReadWinDate(d))
+															pwdChangedTime = d.GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600); // last password changed time
+
+														mf.Seek(32);
+														if (mf.ReadWinDate(d))
+															expiredTime = d.GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600); // account expired time
+
+														mf.Seek(40);
+														if (mf.ReadWinDate(d))
+															invalidLogonTime = d.GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600);
+
+														d = n1.LastWritten();
+														lastWrittenTime = d.GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600);
+
+														mf.Seek(48);
+														int int_RID = mf.ReadBinaryInt(4);
+														String Hex_RID = RID.FormatInt(int_RID, int::HEX, uint Options = 0, uint zeropad = 0);
+														RID = Hex_RID;
+
+														mf.Seek(56); // Account Activation
+														int ac;
+														ac = mf.ReadBinaryInt(1);
+
+														if (int::InRange(ac, 0, 3) || int::InRange(ac, 0x8, 0xB))
+															activation = "Necessary/";
+
+														if (int::InRange(ac, 4, 7) || int::InRange(ac, 0xc, 0xf))
+															activation = "Unnecessary/";
+
+														if (0 == ac % 2)
+															activation = activation + "Active";
+
+														if (1 == ac % 2)
+															activation = activation + "Inactive";
+
+														mf.Seek(57);
+														int pa;
+														pa = mf.ReadBinaryInt(1);
+														if (pa == 2 || pa == 3 || pa == 6 || pa == 7 || pa == 0xE || pa == 0xF)
+															passwordExpiredTime = "None";
+														else {
+															d.Set(pwdChangedTime);
+															pa = d.GetUnix() + 3628800;
+															d.SetUnix(pa);
+															passwordExpiredTime = d.GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600);
+														}
+
+														mf.Seek(60);
+														int int_countryCode = mf.ReadBinaryInt(2);
+														String Hex_countryCode = Hex_countryCode.FormatInt(int_countryCode, int::HEX, 0, 0);
+														countryCodeStr = Hex_countryCode + " \(" + int_countryCode + "\)";
+
+														mf.Seek(64);
+														invalidLogonCount = mf.ReadBinaryInt(2);
+
+														mf.Seek(66);
+														LogonCount = mf.ReadBinaryInt(2);
+
+													}
+												}
+
+											} // F
+
+											if (n1.Name() == "V") {
+												MemoryFileClass mf();
+												if (mf.Open(n1.GetSize(), FileClass::WRITE)) { //must have the FileClass::WRITE flag because GetData() will write to the mem file
+													if (n1.GetData(mf)) {
+														mf.Seek(4);
+														int account_previliage = mf.ReadBinaryInt(4);
+														userPrivilege = userPrivilege.FormatInt(account_previliage, int::HEX, uint Options = 0, uint zeropad = 0);
+														if (userPrivilege == "bc")
+															userPrivilege = "Administrator";
+														if (userPrivilege == "d4")
+															userPrivilege = "Standard user";
+														if (userPrivilege == "b0")
+															userPrivilege = "Guest account";
+
+														mf.Seek(12);
+														int name_offset = mf.ReadBinaryInt(4) + 204; //이름 offset
+
+														mf.Seek(16);
+														int name_length = mf.ReadBinaryInt(4); //이름 길이
+														mf.Seek(name_offset);
+														mf.ReadString(full_name, name_length / 2);
+
+														mf.Seek(24);
+														int all_name_offset = mf.ReadBinaryInt(4) + 204; //전체 계정 이름  이름 offset
+
+														mf.Seek(28);
+														int all_name_length = mf.ReadBinaryInt(4); //전체 계정 이름 이름 길이
+														mf.Seek(all_name_offset);
+														mf.ReadString(fullName, all_name_length / 2);
+
+														mf.Seek(36);
+														int descript_offset = mf.ReadBinaryInt(4) + 204; //설명 offset
+
+														mf.Seek(40);
+														int descript_length = mf.ReadBinaryInt(4); //설명 길이
+														mf.Seek(descript_offset);
+														mf.ReadString(descript, descript_length / 2);
+
+														mf.Seek(72);
+														int homeDir_name_offset = mf.ReadBinaryInt(4) + 204; //홈 디렉토리 이름 offset
+
+														mf.Seek(76);
+														int homeDir_name_length = mf.ReadBinaryInt(4); //홈 디렉토리 이름 길이
+														mf.Seek(homeDir_name_offset);
+														mf.ReadString(homeDir, homeDir_name_length / 2);
+
+														mf.Seek(156);
+														int lmHash_offset = mf.ReadBinaryInt(4) + 204; //LM hash offset
+
+														mf.Seek(160);
+														int lmHash_length = mf.ReadBinaryInt(4); //LM hash 길이
+														//mf.ReadString(lmHash, lmHash_length / 2)
+														for (int i = 4; i < lmHash_length; i++) {
+															mf.Seek(lmHash_offset + i);
+															int lmHash_int = mf.ReadBinaryInt(1);
+															String lmHash_tmp = lmHash_tmp.FormatInt(lmHash_int, int::HEX); ;
+															if (lmHash_int < 16)
+																lmHash_tmp = "0" + lmHash_tmp;
+															lmHash = lmHash + lmHash_tmp;
+														}
+
+														mf.Seek(168);
+														int ntHash_offset = mf.ReadBinaryInt(4) + 204; //NT hash offset
+
+														mf.Seek(172);
+														int ntHash_length = mf.ReadBinaryInt(4); //NT hash 길이
+														for (int i = 4; i < ntHash_length; i++) {
+															mf.Seek(ntHash_offset + i);
+															int ntHash_int = mf.ReadBinaryInt(1);
+															String ntHash_tmp = ntHash_tmp.FormatInt(ntHash_int, int::HEX); ;
+															if (ntHash_int < 16)
+																ntHash_tmp = "0" + ntHash_tmp;
+															ntHash = ntHash + ntHash_tmp;
+														}
+
+														// Console.WriteLine("offset : " +  user_name);
+													}
+												}
+												if (RID_1 == RID){
+													Console.WriteLine("UserID : {0}", full_name);
+													cmd.ExecuteNonQuery("INSERT INTO PC_UserAccount (User, RID, LogonCount, InvalidLogonCount, LastLogonTime, InvalidLogonTime, LastPasswordChangedTime, ExpiredTime, PasswordExpiredTime, FullName, Description, HomeDirectory, LMHash, NTHash, Activation, UserPrivilege, CountryCode ) VALUES ('" + full_name + "', '" + RID + "', '" + LogonCount  + "', '" +  invalidLogonCount + "', '" + lastLogonTime + "', '" + invalidLogonTime + "', '" + pwdChangedTime + "', '" + expiredTime + "', '" + lastWrittenTime  + "', '" + fullName + "', '" + descript + "', '" + homeDir + "', '" + lmHash + "', '" + ntHash + "', '" + activation + "', '" + userPrivilege + "', '" + countryCodeStr + "');");
+												}
+
+											} //v
+										}
+										//break;
+									}
+								} 
+								else {
+										Console.WriteLine("Failed to get HKLM_USERS_RID from Registry. ");
+										//break;
+								}					
+							} //for loop RegValueClass HKLM_SAM_USERS_NAME close
+						}
+					} 
+					else 
+						Console.WriteLine("Failed to Run with RegistryClass. ");
+		}
+		//else
+			//Console.WriteLine("Fail to find Drive");
+						
+	}
+
+	void PrefetchEXE(EntryClass entry, SQLiteClass::CommandClass cmd){
+    	EntryFileClass ef();
+		if(entry.ItemPath().Find("\\Prefetch") != -1) {
+	          NameListClass NameListPath();
+	          NameListPath.Split(entry.ItemPath(),"\\");
+	          int index;
+
+	          foreach(NameListClass n in NameListPath ) {
+	               if(n.Name() =="Prefetch") {
+	                   index = n.Index();
+	               }
+	          }
+
+	          if(NameListPath.GetChild(index).Name() == "Prefetch" && entry.ItemPath().Find("ReadyBoot") == -1 && entry.Extension() == "pf" && entry.Description().Find("Deleted") == -1 ){
+	               if(ef.Open(entry)) {
+	                   DateClass LastRunTime();
+	                   DateClass CreatedTime = entry.Created();
+	                   DateClass ModifyTime = entry.Written();
+
+	                   String ProcessEXE, DevicePath, ProcessPath;
+	                   ef.Seek(0xC),  long FileSize = ef.ReadBinaryInt(4);
+	                   ef.Seek(0x10), ef.ReadString(ProcessEXE,28);
+	                   ef.Seek(0x58), int Count  = ef.ReadBinaryInt(4);
+	                   ef.Seek(0x64), int Offset = ef.ReadBinaryInt(4);
+
+	                   ef.Seek(0x80), ef.ReadWinDate(LastRunTime);
+	                   ef.Seek(0x98), int RunCount = ef.ReadBinaryInt(4);
+
+	                   ef.Seek(Offset);
+						if(Count < 300){
+						   for(int i = 0 ; i < Count ; i++ ) { //Reference List (Loaded DLL files and so on...)
+							   ef.ReadString(DevicePath);
+								
+								if((DevicePath.Contains(ProcessEXE))&&!(DevicePath.Contains(".MUI"))) {
+									ProcessPath = DevicePath;
+									if(DevicePath.Contains("HARDDISKVOLUME1")){
+										ProcessPath.Replace("\\Device\\HARDDISKVOLUME1\\", "C:\\",0,-1, 0);
+									//	ProcessPath = "C:\"" + ProcessPath;
+									}
+									else if(DevicePath.Contains("HARDDISKVOLUME2")){
+										ProcessPath.Replace("\\Device\\HARDDISKVOLUME2\\", "D:\\",0,-1, 0);
+									//	ProcessPath = "D:\"" + ProcessPath;
+									}
+									else if(DevicePath.Contains("HARDDISKVOLUME3")){
+										ProcessPath.Replace("\\Device\\HARDDISKVOLUME3\\", "E:\\",0,-1, 0);
+									//	ProcessPath = "E:\"" + ProcessPath;
+									}
+									else{
+									}
+								}
+								//new  NameValueClass( Prefetch_dialog.NameValue, entry.Name(), 0, DevicePath);
+						   }
+						} 
+						else
+						   Console.WriteLine("Error: Cannot get the process path. Reference lists are not proper."); //maybe memory corrupt. It can be into infinite loop
+					   
+					   cmd.ExecuteNonQuery("INSERT INTO App_EXEFile (SourceFile, FileName, CreatedTime,  FileSize, RunCount, FilePath) VALUES ('" + "PrefetchFile" + "', '" + ProcessEXE + "', '" + LastRunTime.GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600)  + "', '" + FileSize + "', '" + RunCount + "', '" + ProcessPath+ "');");	                   
+	               }
+	          }
+	      }
+	}
+	
+	bool cmp_lnk_recent(StringArr arr, String name, String base_path){
+      String ext = base_path.GetFileExt();
+      name.ReplaceExtension("");
+      for(int i=0;i<arr.Count();i++){
+        arr[i].ReplaceExtension("");        
+        if(arr[i] == name){          
+          return true;
+        }
+      }
+      return false;
+    }
+
+  	void recent_lnk(String path, String csv_path, StringArr pp_list, StringArr word_list, StringArr excel_list, StringArr hwp_list, StringArr adobe_list, SQLiteClass sql){
+      int i=0;
+      LocalFileClass lnk_csv = new LocalFileClass();
+      LocalFileClass pp = new LocalFileClass();
+      LocalFileClass word = new LocalFileClass();
+      LocalFileClass excel = new LocalFileClass();
+      LocalFileClass hwp = new LocalFileClass();
+      LocalFileClass adobe = new LocalFileClass();
+
+      lnk_csv.Open(csv_path);
+      pp.Open(path + "\\pp_recent_doc.csv", FileClass::TEXT + FileClass::WRITE);
+      word.Open(path + "\\word_recent_doc.csv", FileClass::TEXT + FileClass::WRITE);
+      excel.Open(path + "\\excel_recent_doc.csv", FileClass::TEXT + FileClass::WRITE);
+      hwp.Open(path + "\\hwp_recent_doc.csv", FileClass::TEXT + FileClass::WRITE);
+      adobe.Open(path + "\\adobe_recent_doc.csv", FileClass::TEXT + FileClass::WRITE);
+
+      String field = "Name\tMtime\tAtime\tCtime\tBasePath\tDescription\t";
+      pp.WriteLine(field);
+      word.WriteLine(field);
+      excel.WriteLine(field);
+      hwp.WriteLine(field);
+      adobe.WriteLine(field);
+
+      SQLiteClass::CommandClass cmd = new SQLiteClass::CommandClass();
+      sql.CreateCommand(cmd);
+      
+      cmd.ExecuteNonQuery("CREATE TABLE App_Documents (Viewer LONGVARCHAR, Name LONGVARCHAR, mtime LONGVARCHAR, atime LONGVARCHAR, ctime LONGVARCHAR, FileSize LONGVARCHAR, DriveType LONGVARCHAR, Path LONGVARCHAR);");
+
+      String sql_query;
+
+      //Console.WriteLine("[+] lnk_csv path : {0}", lnk_csv.Name());
+      while(lnk_csv.More()){
+        String union_insert_q = "insert into App_Documents (Viewer, Name, mtime, atime, ctime, FileSize, DriveType, Path) values ('";
+        String line = "";
+        lnk_csv.ReadString(line, -1, "\n");
+        if(i==0){
+          i++;
+          continue;
+        }
+
+        String obj = line.SubString(0,line.Find("\t"));
+        String time = line.SubString(line.Find("\t")+1,-1);
+        //int file_size = int::Convert(time.SubString(0, time.Find("\t")),int::DECIMAL);
+        String file_size = time.SubString(0, time.Find("\t"));
+        time = time.SubString(time.Find("\t")+1,-1);
+        String drive_type = time.SubString(0,time.Find("\t"));
+        time = time.SubString(time.Find("\t")+1,-1);
+        String mtime = time.SubString(0,time.Find("\t"));
+        time = time.SubString(time.Find("\t")+1,-1);
+        String atime = time.SubString(0,time.Find("\t"));
+        time = time.SubString(time.Find("\t")+1,-1);
+        String ctime = time.SubString(0,time.Find("\t"));
+        time = time.SubString(time.Find("\t")+1,-1);
+        String base_path = time.SubString(0,time.Find("\t"));
+
+
+        String ext = obj.GetFileExt();
+        ext.ToLower();
+
+        if(ext == "lnk")
+          obj.ReplaceExtension("");
+
+        String viewer = "";
+        //Console.WriteLine(obj);
+        String query = obj + "\t" + file_size + "\t" + drive_type + "\t" +  mtime + "\t" + atime + "\t" + ctime + "\t" + base_path + "\t";
+        
+        if(cmp_lnk_recent(pp_list, obj, base_path)){
+          viewer = "PowerPoint";
+          pp.WriteLine(query);
+          sql_query = "insert into powerpoint(Name, FileSize, DriveType, mtime, atime, ctime, local_path) values(\'" + obj + "\'," + file_size + ",\'" + drive_type + "\',\'" + mtime + "\',\'" + atime + "\',\'" + ctime + "\',\'" + base_path + "\');";
+          //cmd.ExecuteNonQuery(sql_query);
+          union_insert_q += viewer + "','" + obj +  "','" + mtime + "','" + atime + "','" + ctime + "','" + file_size + "','" + drive_type + "','" + base_path + "');";
+          //new RecentDocListClass(RD_dialog.List, viewer, obj, mtime, atime, ctime, file_size, drive_type, base_path);
+          cmd.ExecuteNonQuery(union_insert_q);
+        }
+        else if(cmp_lnk_recent(word_list, obj, base_path)){
+          viewer = "Word";
+          word.WriteLine(query);
+          sql_query = "insert into word(Name, FileSize, DriveType, mtime, atime, ctime, local_path) values(\'" + obj + "\'," + file_size + ",\'" + drive_type + "\',\'" + mtime + "\',\'" + atime + "\',\'" + ctime + "\',\'" + base_path + "\');";
+          //cmd.ExecuteNonQuery(sql_query);
+          union_insert_q += viewer + "','" + obj +  "','" + mtime + "','" + atime + "','" + ctime + "','" + file_size + "','" + drive_type + "','" + base_path + "');";
+          //new RecentDocListClass(RD_dialog.List, viewer, obj, mtime, atime, ctime, file_size, drive_type, base_path);
+          cmd.ExecuteNonQuery(union_insert_q);
+        }
+        else if(cmp_lnk_recent(excel_list, obj, base_path)){
+          viewer = "Excel";
+          excel.WriteLine(query);
+          sql_query = "insert into excel(Name, FileSize, DriveType, mtime, atime, ctime, local_path) values(\'" + obj + "\'," + file_size + ",\'" + drive_type + "\',\'" + mtime + "\',\'" + atime + "\',\'" + ctime + "\',\'" + base_path + "\');";
+          //cmd.ExecuteNonQuery(sql_query);
+          union_insert_q += viewer + "','" + obj +  "','" + mtime + "','" + atime + "','" + ctime + "','" + file_size + "','" + drive_type + "','" + base_path + "');";
+          //new RecentDocListClass(RD_dialog.List, viewer, obj, mtime, atime, ctime, file_size, drive_type, base_path);
+          cmd.ExecuteNonQuery(union_insert_q);
+        }
+        else if(cmp_lnk_recent(hwp_list, obj, base_path)){
+          viewer = "Hangul";
+          hwp.WriteLine(query);
+          sql_query = "insert into hwp(Name, FileSize, DriveType, mtime, atime, ctime, local_path) values(\'" + obj + "\'," + file_size + ",\'" + drive_type + "\',\'" + mtime + "\',\'" + atime + "\',\'" + ctime + "\',\'" + base_path + "\');";
+          //cmd.ExecuteNonQuery(sql_query);
+          union_insert_q += viewer + "','" + obj +  "','" + mtime + "','" + atime + "','" + ctime + "','" + file_size + "','" + drive_type + "','" + base_path + "');";
+          //new RecentDocListClass(RD_dialog.List, viewer, obj, mtime, atime, ctime, file_size, drive_type, base_path);
+          cmd.ExecuteNonQuery(union_insert_q);
+        }
+        else if(cmp_lnk_recent(adobe_list, obj, base_path)){
+          viewer = "AdobeReader";
+          adobe.WriteLine(query);
+          sql_query = "insert into adobe(Name, FileSize, DriveType, mtime, atime, ctime, local_path) values(\'" + obj + "\'," + file_size + ",\'" + drive_type + "\',\'" + mtime + "\',\'" + atime + "\',\'" + ctime + "\',\'" + base_path + "\');";
+          //cmd.ExecuteNonQuery(sql_query);
+          union_insert_q += viewer + "','" + obj +  "','" + mtime + "','" + atime + "','" + ctime + "','" + file_size + "','" + drive_type + "','" + base_path + "');";
+          //new RecentDocListClass(RD_dialog.List, viewer, obj, mtime, atime, ctime, file_size, drive_type, base_path);
+          cmd.ExecuteNonQuery(union_insert_q);
+        }
+
+
+        //Console.WriteLine(sql_query);
+      }
+      lnk_csv.Close();
+      pp.Close();
+      word.Close();
+      excel.Close();
+      hwp.Close();
+      adobe.Close();
+    }
+
+  	void print_str_list(StringArr str_arr){
+        for(int i=0;i<str_arr.Count();i++)
+            Console.WriteLine(str_arr[i]);
+  	}
+
+  	void str_cmp_add(StringArr str_arr, String target){
+      bool flag = true;
+      for(int i=0;i<str_arr.Count();i++){
+          if(target == str_arr[i]){
+              flag = false;
+              break;
+          }
+      }
+      if(flag)
+          str_arr.Add(target);
+  	}
+
+  	void recent_doc(EntryClass e, String reg_path, StringArr list){
+        RegistryClass reg(e);
+        RegValueClass values();
+        RegCommandClass::Keys key = RegCommandClass::HKEY_CURRENT_USER;
+        RegCommandClass cmd();
+
+        String str_num, name, result;
+        int num = 1;
+        while(1){
+
+            if(reg_path.Contains("Office")){
+                str_num = String::FormatInt(num);
+                name = "Item " + str_num;
+            }
+            else if(reg_path.Contains("Hnc")){
+                str_num = String::FormatInt(num-1);
+                name = "file" + str_num;
+            }
+            else if(reg_path.Contains("Adobe")){
+                str_num = String::FormatInt(num);
+                name = "\\c" + str_num;
+                reg_path += name;
+                name = "tDIText";
+            }
+            num += 1;
+            //Console.WriteLine("reg path : {0}\tname : {1}",reg_path, name);
+            new RegCommandClass(cmd, name, RegCommandClass::READVALUE, key, reg_path, name, 0, 1);
+            if(reg.Run(cmd, values)){
+                forall(RegValueClass cmd_name in values){
+                    MemoryFileClass mf();
+                    if(mf.Open(8, FileClass::WRITE)){
+                        mf.Seek(0);
+                        if(cmd_name.GetData(mf)){
+                            mf.Seek(0);
+                            mf.ReadString(result);
+                            //Console.WriteLine(result);
+                            if(result.Contains("Unable to open registry")) return;
+                            if(result != "Cannot read value")
+                                str_cmp_add(list, result.GetFilename2());
+                        }
+                    }
+                }
+            }
+            else{
+              break;
+            }
+            if(result == "Cannot read value") {
+                //Console.WriteLine(result);
+                //print_str_list(list);
+                break;
+            }
+        }
+    }
+
+    void pp_doc(EntryClass e, String path, StringArr list){
+        String reg_path1 = "Software\\Microsoft\\Office\\13.0\\PowerPoint\\File MRU";
+        String reg_path2 = "Software\\Microsoft\\Office\\14.0\\PowerPoint\\File MRU";
+        String reg_path3 = "Software\\Microsoft\\Office\\15.0\\PowerPoint\\File MRU";
+        String reg_path4 = "Software\\Microsoft\\Office\\16.0\\PowerPoint\\File MRU";
+        Console.WriteLine("\n[+] PowerPoint Recent Files");
+        recent_doc(e, reg_path1, list);
+        recent_doc(e, reg_path2, list);
+        recent_doc(e, reg_path3, list);
+        recent_doc(e, reg_path4, list);        
+    }
+
+    void word_doc(EntryClass e, String path, StringArr list){
+        String reg_path1 = "Software\\Microsoft\\Office\\13.0\\Word\\File MRU";
+        String reg_path2 = "Software\\Microsoft\\Office\\14.0\\Word\\File MRU";
+        String reg_path3 = "Software\\Microsoft\\Office\\15.0\\Word\\File MRU";
+        String reg_path4 = "Software\\Microsoft\\Office\\16.0\\Word\\File MRU";
+        Console.WriteLine("\n[+] Word Recent Files");
+        recent_doc(e, reg_path1, list);
+        recent_doc(e, reg_path2, list);
+        recent_doc(e, reg_path3, list);
+        recent_doc(e, reg_path4, list);
+    }
+
+    void excel_doc(EntryClass e, String path, StringArr list){
+        String reg_path1 = "Software\\Microsoft\\Office\\13.0\\Excel\\File MRU";
+        String reg_path2 = "Software\\Microsoft\\Office\\14.0\\Excel\\File MRU";
+        String reg_path3 = "Software\\Microsoft\\Office\\15.0\\Excel\\File MRU";
+        String reg_path4 = "Software\\Microsoft\\Office\\16.0\\Excel\\File MRU";
+        Console.WriteLine("\n[+] Excel Recent Files");
+        recent_doc(e, reg_path1, list);
+        recent_doc(e, reg_path2, list);
+        recent_doc(e, reg_path3, list);
+        recent_doc(e, reg_path4, list);
+    }
+
+    void hwp_doc(EntryClass e, String path, StringArr list){
+        String reg_path = "Software\\Hnc\\Hwp\\9.0\\HwpFrame_KOR\\RecentFile";
+        String reg_path2 = "Software\\Hnc\\Hwp\\9.0\\HwpFrame\\RecentFile";
+        Console.WriteLine("\n[+] Hwp Recent Files");
+        recent_doc(e, reg_path, list);
+        recent_doc(e, reg_path2, list);
+    }
+
+    void adobe_doc(EntryClass e, String path, StringArr list){
+        String reg_path;
+        reg_path = "Software\\Adobe\\Acrobat Reader\\DC\\AVGeneral\\cRecentFiles";
+        Console.WriteLine("\n[+] Adobe Recent Files");
+        recent_doc(e, reg_path, list);
+    }
+
+    void ExportLink(EntryClass e, SQLiteClass::CommandClass cmd, LocalFileClass lf){
+    	String path = c.ExportFolder() + "\\link_files";
+        String lnk_path = path + "\\lnk_parse.csv";
+
+      	StringArr pp_list(), word_list(), excel_list(), hwp_list(), adobe_list();
+
+        StringArr lnk();
+        IntArr cnt();
+
+        uint num = 0;
+        String str_num;
+        String name;        
+        
+        String ext = e.Extension();
+        ext.ToLower();
+
+        if(ext == "lnk"){
+            EntryFileClass ef();
+            ef.Open(e);
+
+            DateClass obj_ctime(), obj_mtime(), obj_atime();
+
+            String ctime, mtime, atime;
+            ctime = e.Created().GetString("yyyy/MM/dd", "HH:mm:ss", -9*3600);
+            mtime = e.Written().GetString("yyyy/MM/dd", "HH:mm:ss", -9*3600);
+            atime = e.Accessed().GetString("yyyy/MM/dd", "HH:mm:ss", -9*3600);
+
+            ef.Seek(0x1c);
+            ef.ReadWinDate(obj_ctime);
+            ef.ReadWinDate(obj_atime);
+            ef.ReadWinDate(obj_mtime);
+
+            int file_size = ef.ReadBinaryInt(4);
+
+            int offset = 0x4c;
+            ef.Seek(offset);
+            int IDListSize = ef.ReadBinaryInt(2);
+
+            offset += IDListSize + 2;
+            ef.Seek(offset);
+
+            //Console.WriteLine("lnk offset: {0}",ef.GetPos());
+            int local_info_size = ef.ReadBinaryInt(4);
+            int local_info_hdr_size = ef.ReadBinaryInt(4);
+            int location_flag = ef.ReadBinaryInt(4);
+            int vol_offset = ef.ReadBinaryInt(4);
+            int local_path_offset = ef.ReadBinaryInt(4);
+            ef.Skip(8), int local_path_uni_offset = ef.ReadBinaryInt(4);
+
+            String local_path, local_path_uni, drive_type;
+            //Volume ID
+            if(vol_offset != 0){
+                ef.Seek(offset + vol_offset);
+                int vol_size = ef.ReadBinaryInt(4);
+                int drive = ef.ReadBinaryInt(4);
+                if(drive == 0) drive_type = "UNKNOWN";
+                else if(drive == 1) drive_type = "NO_ROOT";
+                else if(drive == 2) drive_type = "EXTERNAL_DEV";
+                else if(drive == 3) drive_type = "FIXED_DEV";
+                else if(drive == 4) drive_type = "NETWORK";
+                else if(drive == 5) drive_type = "CD-ROM";
+                else if(drive == 6) drive_type = "RAM_DISK";
+
+                int serial_num = ef.ReadBinaryInt(4);
+            }
+            if(local_path_offset != 0){
+              ef.SetCodePage(CodePageClass::ANSI);
+                ef.Seek(offset + local_path_offset);
+                ef.ReadString(local_path);
+                if(local_path_uni_offset){
+                    ef.Seek(offset + local_path_uni_offset);
+                    ef.ReadString(local_path_uni);
+                }
+            }            
+            String query = e.Name() + "\t" + file_size + "\t" + drive_type + "\t" + mtime + "\t" + atime + "\t" + ctime + "\t" + local_path + "\t";
+            lf.WriteLine(query);
+        }        
+    }
+
+void host_extract(String url, StringArr host, IntArr host_fre){
+    String tmp;
+    int idx;
+    StringArr host_ext();
+    host_ext.Add(".com/"), host_ext.Add(".co."), host_ext.Add(".net/"), host_ext.Add(".org/"), host_ext.Add(".ac.");
+
+    for(int i=0;i<host_ext.Count();i++){
+      if(url.Contains(host_ext[i])){
+        tmp = url.SubString(0, url.Find(host_ext[i]));
+        while(tmp.Find(".") != -1){
+          tmp = tmp.SubString(tmp.Find(".")+1, -1);
+        }
+        if(tmp.Contains("http")){
+          tmp.Trim("https://", TRIMALL);
+          tmp.Trim("http://", TRIMALL);
+        }
+        idx = host.Find(tmp);
+        if(idx == -1){
+          host.Add(tmp);
+          host_fre.Add(1);
+        }
+        else
+          host_fre[idx]++;
+
+        break;
+      }
+    }
+  }
+  
+void sql2csv(SQLiteClass::DataReaderClass dataReader, LocalFileClass result, String full_path, String table_name){
+		SQLiteClass copy = new SQLiteClass();
+		LocalFileClass copy_db = new LocalFileClass();
+		//if(!copy_db.Open(full_path + "\\history.sqlite", FileClass::APPEND))
+		if(!copy_db.Open("C:\\TimeLineArtifacts_Total.sqlite", FileClass::APPEND))
+		  Console.WriteLine("fail to open " + full_path + "\\" + full_path.GetFilename() +  "_history.sqlite");
+		if(!copy.Open(copy_db, SQLiteClass::SQLITE_OPEN_READWRITE))
+		  Console.WriteLine("fail to open history db " + full_path.GetFilename());
+		SQLiteClass::CommandClass copy_cmd = new SQLiteClass::CommandClass();
+		if(!copy.CreateCommand(copy_cmd))
+		  Console.WriteLine("fail to create command");
+
+
+		StringArr time_arr();
+		time_arr.Add("start_time");
+		time_arr.Add("end_time");
+		time_arr.Add("last_access_time");
+		time_arr.Add("last_visit_time");
+		time_arr.Add("dateAdded");
+		time_arr.Add("lastModified");
+		time_arr.Add("last_visit_date");
+
+		StringArr ff_download_arr();
+		ff_download_arr.Add("id");
+		ff_download_arr.Add("path");
+		ff_download_arr.Add("start_time");
+		ff_download_arr.Add("end_time");
+		ff_download_arr.Add("file_size");
+
+		String browser;
+		bool set_table = true;
+		if(table_name == "Web_cr_visit"){
+		  browser = "Chrome";
+		  //set_table = copy_cmd.ExecuteNonQuery("CREATE TABLE "+table_name+"(id INTEGER PRIMARY KEY AUTOINCREMENT,url LONGVARCHAR,title LONGVARCHAR,visit_count INTEGER DEFAULT 0 NOT NULL,typed_count INTEGER DEFAULT 0 NOT NULL,last_visit_time LONGVARCHAR,hidden INTEGER DEFAULT 0 NOT NULL);");
+		}
+		else if(table_name == "Web_cr_download"){
+		  browser = "Chrome";
+		  //set_table = copy_cmd.ExecuteNonQuery("CREATE TABLE "+table_name+" (id INTEGER PRIMARY KEY,guid VARCHAR NOT NULL,current_path LONGVARCHAR NOT NULL,target_path LONGVARCHAR NOT NULL,start_time LONGVARCHAR,received_bytes INTEGER NOT NULL,total_bytes INTEGER NOT NULL,state INTEGER NOT NULL,danger_type INTEGER NOT NULL,interrupt_reason INTEGER NOT NULL,hash BLOB NOT NULL,end_time LONGVARCHAR NOT NULL,opened INTEGER NOT NULL,last_access_time LONGVARCHAR NOT NULL,transient INTEGER NOT NULL,referrer VARCHAR NOT NULL,site_url VARCHAR NOT NULL,tab_url VARCHAR NOT NULL,tab_referrer_url VARCHAR NOT NULL,http_method VARCHAR NOT NULL,by_ext_id VARCHAR NOT NULL,by_ext_name VARCHAR NOT NULL,etag VARCHAR NOT NULL,last_modified VARCHAR NOT NULL,mime_type VARCHAR(255) NOT NULL,original_mime_type VARCHAR(255) NOT NULL);");
+		}
+		else if(table_name == "Web_ff_visit"){
+		  browser = "Firefox";
+		  //set_table = copy_cmd.ExecuteNonQuery("CREATE TABLE "+table_name+" (   id INTEGER PRIMARY KEY, url LONGVARCHAR, title LONGVARCHAR, rev_host LONGVARCHAR, visit_count INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0 NOT NULL, typed INTEGER DEFAULT 0 NOT NULL, frecency INTEGER DEFAULT -1 NOT NULL, last_visit_date LONGVARCHAR, guid TEXT, foreign_count INTEGER DEFAULT 0 NOT NULL, url_hash INTEGER DEFAULT 0 NOT NULL );");
+		}
+		else if(table_name == "Web_ff_download"){
+		  browser = "Firefox";
+		  //set_table = copy_cmd.ExecuteNonQuery("CREATE TABLE "+table_name+" (  id INTEGER PRIMARY KEY, place_id INTEGER NOT NULL, anno_attribute_id INTEGER, content LONGVARCHAR, flags INTEGER DEFAULT 0, expiration INTEGER DEFAULT 0, type INTEGER DEFAULT 0, dateAdded LONGVARCHAR, lastModified LONGVARCHAR);");
+		  //set_table = copy_cmd.ExecuteNonQuery("CREATE TABLE "+table_name+" ( id INTEGER PRIMARY KEY, path LONGVARCHAR, start_time LONGVARCHAR, end_time LONGVARCHAR, file_size LONGVARCHAR);");
+		}
+		else if(table_name == "Web_op_visit"){
+		  browser = "Opera";
+		  //set_table = copy_cmd.ExecuteNonQuery("CREATE TABLE "+table_name+"(id INTEGER PRIMARY KEY AUTOINCREMENT,url LONGVARCHAR,title LONGVARCHAR,visit_count INTEGER DEFAULT 0 NOT NULL,typed_count INTEGER DEFAULT 0 NOT NULL,last_visit_time LONGVARCHAR NOT NULL,hidden INTEGER DEFAULT 0 NOT NULL)");
+		}
+		else if(table_name == "Web_op_download"){
+		  browser = "Opera";
+		  //set_table = copy_cmd.ExecuteNonQuery("CREATE TABLE "+table_name+" (id INTEGER PRIMARY KEY,guid VARCHAR NOT NULL,current_path LONGVARCHAR NOT NULL,target_path LONGVARCHAR NOT NULL,start_time LONGVARCHAR NOT NULL,received_bytes INTEGER NOT NULL,total_bytes INTEGER NOT NULL,state INTEGER NOT NULL,danger_type INTEGER NOT NULL,interrupt_reason INTEGER NOT NULL,hash BLOB NOT NULL,end_time LONGVARCHAR NOT NULL,opened INTEGER NOT NULL,last_access_time LONGVARCHAR NOT NULL,transient INTEGER NOT NULL,referrer VARCHAR NOT NULL,site_url VARCHAR NOT NULL,tab_url VARCHAR NOT NULL,tab_referrer_url VARCHAR NOT NULL,http_method VARCHAR NOT NULL,by_ext_id VARCHAR NOT NULL,by_ext_name VARCHAR NOT NULL,etag VARCHAR NOT NULL,last_modified VARCHAR NOT NULL,mime_type VARCHAR(255) NOT NULL,original_mime_type VARCHAR(255) NOT NULL);");
+		}
+
+		StringArr host();
+		IntArr host_fre();
+
+		int ff_check = 0;
+		int ff_download_cnt = 0;
+		StringArr ff_download_val();
+		String ff_download_field = "";
+		String ff_download_query = "";
+		String ff_insert_query = "";
+
+		String tmp_url, tmp_time, tmp_title;
+		String tmp_path, tmp_start_time, tmp_end_time, tmp_received_bytes, tmp_total_bytes, tmp_origin;
+
+		while(dataReader.Read()){
+		  String query = "";
+		  String field = "";
+		  uint fieldCnt;
+		  StringArr field_arr();
+		  StringArr field_val();
+		  String insert_query = "";
+		  long time;
+		  DateClass date;
+		  String date_str;
+		  String union_insert_q = "insert into Web_Visit(Browser, url, title, time) values('" + browser + "','";
+		  bool readData = dataReader.GetFieldCount(fieldCnt);
+		  for(int i=0;i<fieldCnt;i++){
+		    String fieldName;
+		    variant v;
+		    SQLiteClass::DataReaderClass::DataTypes fieldType;
+		    readData = dataReader.GetFieldName(i, fieldName);
+		    readData = dataReader.Get(i,v);
+		    field_arr.Add(fieldName);
+
+		    if(fieldName == "url"){
+		      String url = v.GetString();
+		      host_extract(url, host, host_fre);
+		    }
+		    if(time_arr.Find(fieldName) != -1){
+		      time = ulong::Convert(v.GetString(), int::DECIMAL);
+		      if(table_name.Contains("cr") || table_name.Contains("op")){
+		        date.SetUnix(time/1000000 - 11644473600);
+		      }
+		      else if(table_name.Contains("ff")){
+		        date.SetUnix(time/1000000);
+		      }
+		      date_str = date.GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600);
+		      query += date_str + "\t";
+		      field_val.Add(date_str);
+		    }
+		    else{
+		      query += v.GetString() + "\t";
+		      field_val.Add(v.GetString());
+		    }
+
+		    field += fieldName + "\t";
+
+		  }
+
+		  for(int i=0;i<field_val.Count();i++){
+		    insert_query += "\'" + field_val[i] + "\'";
+		    if(i != field_arr.Count()-1)
+		      insert_query += ",";
+		    if(i == 1)
+		      tmp_url = field_val[i];
+		    else if(i == 2)
+		      tmp_title = field_val[i];
+		    else{
+		      if(table_name == "Web_cr_visit" || table_name == "Web_op_visit"){
+		        if(i==5) tmp_time = field_val[i];
+		      }
+		      else if(table_name == "Web_ff_visit"){
+		        if(i==8) tmp_time = field_val[i];
+		      }
+		    }
+		  }	      
+
+		  union_insert_q += tmp_url + "','" + tmp_title + "','" + tmp_time + "');";
+
+		  Console.WriteLine(union_insert_q);
+		  copy_cmd.ExecuteNonQuery(union_insert_q);
+
+		  //result.WriteLine();
+		  //f_flag = false;
+		  //Console.WriteLine(query);
+		}
+
+		copy.Close();
+		copy_db.Close();
+	}
+
+	void download_sql2csv(SQLiteClass::DataReaderClass dataReader, LocalFileClass result, String full_path, String table_name){
+		SQLiteClass copy = new SQLiteClass();
+		LocalFileClass copy_db = new LocalFileClass();
+		//if(!copy_db.Open(full_path + "\\history.sqlite", FileClass::APPEND))
+		if(!copy_db.Open("C:\\TimeLineArtifacts_Total.sqlite", FileClass::APPEND))
+		  Console.WriteLine("fail to open " + full_path + "\\" + full_path.GetFilename() +  "_history.sqlite");
+		if(!copy.Open(copy_db, SQLiteClass::SQLITE_OPEN_READWRITE))
+		  Console.WriteLine("fail to open history db " + full_path.GetFilename());
+		SQLiteClass::CommandClass copy_cmd = new SQLiteClass::CommandClass();
+		if(!copy.CreateCommand(copy_cmd))
+		  Console.WriteLine("fail to create command");
+
+		StringArr time_arr();
+		time_arr.Add("start_time");
+		time_arr.Add("end_time");
+		time_arr.Add("last_access_time");
+		time_arr.Add("last_visit_time");
+		time_arr.Add("dateAdded");
+		time_arr.Add("lastModified");
+		time_arr.Add("last_visit_date");
+
+		StringArr ff_download_arr();
+		ff_download_arr.Add("id");
+		ff_download_arr.Add("path");
+		ff_download_arr.Add("start_time");
+		ff_download_arr.Add("end_time");
+		ff_download_arr.Add("file_size");
+
+		String browser;
+		bool set_table = true;
+		if(table_name == "Web_cr_visit"){
+		  browser = "Chrome";
+		 //set_table = copy_cmd.ExecuteNonQuery("CREATE TABLE "+table_name+"(id INTEGER PRIMARY KEY AUTOINCREMENT,url LONGVARCHAR,title LONGVARCHAR,visit_count INTEGER DEFAULT 0 NOT NULL,typed_count INTEGER DEFAULT 0 NOT NULL,last_visit_time LONGVARCHAR,hidden INTEGER DEFAULT 0 NOT NULL);");
+		}
+		else if(table_name == "Web_cr_download"){
+		  browser = "Chrome";
+		  //set_table = copy_cmd.ExecuteNonQuery("CREATE TABLE "+table_name+" (id INTEGER PRIMARY KEY,guid VARCHAR NOT NULL,current_path LONGVARCHAR NOT NULL,target_path LONGVARCHAR NOT NULL,start_time LONGVARCHAR,received_bytes INTEGER NOT NULL,total_bytes INTEGER NOT NULL,state INTEGER NOT NULL,danger_type INTEGER NOT NULL,interrupt_reason INTEGER NOT NULL,hash BLOB NOT NULL,end_time LONGVARCHAR NOT NULL,opened INTEGER NOT NULL,last_access_time LONGVARCHAR NOT NULL,transient INTEGER NOT NULL,referrer VARCHAR NOT NULL,site_url VARCHAR NOT NULL,tab_url VARCHAR NOT NULL,tab_referrer_url VARCHAR NOT NULL,http_method VARCHAR NOT NULL,by_ext_id VARCHAR NOT NULL,by_ext_name VARCHAR NOT NULL,etag VARCHAR NOT NULL,last_modified VARCHAR NOT NULL,mime_type VARCHAR(255) NOT NULL,original_mime_type VARCHAR(255) NOT NULL);");
+		}
+		else if(table_name == "Web_ff_visit"){
+		  browser = "Firefox";
+		  //set_table = copy_cmd.ExecuteNonQuery("CREATE TABLE "+table_name+" (   id INTEGER PRIMARY KEY, url LONGVARCHAR, title LONGVARCHAR, rev_host LONGVARCHAR, visit_count INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0 NOT NULL, typed INTEGER DEFAULT 0 NOT NULL, frecency INTEGER DEFAULT -1 NOT NULL, last_visit_date LONGVARCHAR, guid TEXT, foreign_count INTEGER DEFAULT 0 NOT NULL, url_hash INTEGER DEFAULT 0 NOT NULL );");
+		}
+		else if(table_name == "Web_ff_download"){
+		  browser = "Firefox";
+		  //set_table = copy_cmd.ExecuteNonQuery("CREATE TABLE "+table_name+" (  id INTEGER PRIMARY KEY, place_id INTEGER NOT NULL, anno_attribute_id INTEGER, content LONGVARCHAR, flags INTEGER DEFAULT 0, expiration INTEGER DEFAULT 0, type INTEGER DEFAULT 0, dateAdded LONGVARCHAR, lastModified LONGVARCHAR);");
+		  //set_table = copy_cmd.ExecuteNonQuery("CREATE TABLE "+table_name+" ( id INTEGER PRIMARY KEY, path LONGVARCHAR, start_time LONGVARCHAR, end_time LONGVARCHAR, file_size LONGVARCHAR);");
+		}
+		else if(table_name == "Web_op_visit"){
+		  browser = "Opera";
+		  //set_table = copy_cmd.ExecuteNonQuery("CREATE TABLE "+table_name+"(id INTEGER PRIMARY KEY AUTOINCREMENT,url LONGVARCHAR,title LONGVARCHAR,visit_count INTEGER DEFAULT 0 NOT NULL,typed_count INTEGER DEFAULT 0 NOT NULL,last_visit_time LONGVARCHAR NOT NULL,hidden INTEGER DEFAULT 0 NOT NULL)");
+		}
+		else if(table_name == "Web_op_download"){
+		  browser = "Opera";
+		  //set_table = copy_cmd.ExecuteNonQuery("CREATE TABLE "+table_name+" (id INTEGER PRIMARY KEY,guid VARCHAR NOT NULL,current_path LONGVARCHAR NOT NULL,target_path LONGVARCHAR NOT NULL,start_time LONGVARCHAR NOT NULL,received_bytes INTEGER NOT NULL,total_bytes INTEGER NOT NULL,state INTEGER NOT NULL,danger_type INTEGER NOT NULL,interrupt_reason INTEGER NOT NULL,hash BLOB NOT NULL,end_time LONGVARCHAR NOT NULL,opened INTEGER NOT NULL,last_access_time LONGVARCHAR NOT NULL,transient INTEGER NOT NULL,referrer VARCHAR NOT NULL,site_url VARCHAR NOT NULL,tab_url VARCHAR NOT NULL,tab_referrer_url VARCHAR NOT NULL,http_method VARCHAR NOT NULL,by_ext_id VARCHAR NOT NULL,by_ext_name VARCHAR NOT NULL,etag VARCHAR NOT NULL,last_modified VARCHAR NOT NULL,mime_type VARCHAR(255) NOT NULL,original_mime_type VARCHAR(255) NOT NULL);");
+		}
+
+		//copy_cmd.ExecuteNonQuery("CREATE TABLE Web_Download (Browser LONGVARCHAR, Path LONGVARCHAR, StartTime LONGVARCHAR, EndTime LONGVARCHAR, RecvBytes LONGVARCHAR, TotalBytes LONGVARCHAR, Url LONGVARCHAR);");
+
+
+		int ff_check = 0;
+		int ff_download_cnt = 0;
+		StringArr ff_download_val();
+		String ff_download_field = "";
+		String ff_download_query = "";
+		String ff_insert_query = "";
+
+		String tmp_url, tmp_time;
+		String tmp_path, tmp_start_time, tmp_end_time, tmp_received_bytes, tmp_total_bytes, tmp_origin;
+
+		while(dataReader.Read()){
+		  String query = "";
+		  String field = "";
+		  uint fieldCnt;
+		  StringArr field_arr();
+		  StringArr field_val();
+		  String insert_query = "";
+		  long time;
+		  DateClass date;
+		  String date_str;
+		  String union_insert_q = "insert into Web_Download (Browser, Path, StartTime, EndTime, RecvBytes, TotalBytes, Url) values ('" + browser + "','";
+		  bool readData = dataReader.GetFieldCount(fieldCnt);
+		  int ff_attribute_id;
+		  int ff_attribute_flag = 1;
+		  for(int i=0;i<fieldCnt;i++){
+		    String fieldName;
+		    variant v;
+		    SQLiteClass::DataReaderClass::DataTypes fieldType;
+		    readData = dataReader.GetFieldName(i, fieldName);
+		    readData = dataReader.Get(i,v);
+		    field_arr.Add(fieldName);
+
+
+		    if(table_name.Contains("ff_download")){
+		      if(ff_check % 2 == 0){
+		        if(fieldName == "content"){
+		          ff_download_query = "";
+		          ff_download_field = "";
+		          ff_download_val.Delete(0,ff_download_val.Count());
+		          ff_download_query += v.GetString() + "\t";
+		          ff_download_field += "id" + "\t";
+		          ff_download_field += "path" + "\t";
+		          ff_download_val.Add(ff_download_cnt);
+		          ff_download_val.Add(v.GetString());
+		          ff_download_cnt++;
+		        }
+		        else if(fieldName == "dateAdded"){
+		          time = ulong::Convert(v.GetString(), int::DECIMAL);
+		          date.SetUnix(time/1000000);
+		          date_str = date.GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600);
+		          ff_download_query += date_str + "\t";
+		          ff_download_field += "start_time" + "\t";
+		          ff_download_val.Add(date_str);
+		        }
+		        else if(fieldName == "ff_attribute_id"){
+		          ff_attribute_id = int::Convert(v.GetString(),int::DECIMAL);
+		          if(ff_attribute_id == 4 || ff_attribute_id == 5) ff_attribute_flag = 1;
+		          else ff_attribute_flag = 0;
+		        }
+		      }
+		      else{
+		        if(fieldName == "content" && ff_attribute_flag == 1){
+		          String content = v.GetString();
+		          int idx1 = content.Find("endTime");
+		          int idx2 = content.Find("fileSize");
+		          int idx3 = content.Find("}");
+		          String end = content.SubString(content.Find("endTime")+9, idx2-idx1-11);
+		          time = ulong::Convert(end, int::DECIMAL);
+		          date.SetUnix(time/1000);
+		          date_str = date.GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600);
+		          ff_download_query += date_str + "\t";
+		          String filesize = content.SubString(idx2+10, idx3-idx2-10);
+		          ff_download_query += filesize + "\t";
+		          ff_download_field += "end_time" + "\t";
+		          ff_download_field += "file_size" + "\t";
+		          ff_download_val.Add(date_str);
+		          ff_download_val.Add(filesize);
+		        }
+		      }
+		    }
+		    else if(table_name.Contains("download")){
+		      if(fieldName == "start_time" || fieldName == "end_time"){
+		        time = ulong::Convert(v.GetString(), int::DECIMAL);
+		        date.SetUnix(time/1000000 - 11644473600);
+		        date_str = date.GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600);
+		        query += date_str + "\t";
+		        field_val.Add(date_str);
+		        field += fieldName + "\t";
+		        if(fieldName == "start_time")
+		          tmp_start_time = date_str;
+		        else
+		          tmp_end_time = date_str;
+		      }
+		      else if(fieldName == "id" || fieldName == "current_path" || fieldName == "received_bytes" || fieldName == "total_bytes" || fieldName == "referrer"){
+		        field_val.Add(v.GetString());
+		        field += fieldName + "\t";
+		        if(fieldName == "current_path") tmp_path = v.GetString();
+		        else if(fieldName == "received_bytes") tmp_received_bytes = v.GetString();
+		        else if(fieldName == "total_bytes") tmp_total_bytes = v.GetString();
+		        else if(fieldName == "referrer") tmp_origin = v.GetString();
+		      }
+		    }
+		    else{
+		      if(time_arr.Find(fieldName) != -1){
+		        time = ulong::Convert(v.GetString(), int::DECIMAL);
+		        if(table_name.Contains("cr") || table_name.Contains("op")){
+		          date.SetUnix(time/1000000 - 11644473600);
+		        }
+		        else if(table_name.Contains("ff")){
+		          date.SetUnix(time/1000000);
+		        }
+		        date_str = date.GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600);
+		        query += date_str + "\t";
+		        field_val.Add(date_str);
+		      }
+		      else{
+		        query += v.GetString() + "\t";
+		        field_val.Add(v.GetString());
+		      }
+
+		      field += fieldName + "\t";
+		    }
+		  }
+
+		  insert_query = "insert into "+table_name+" (";
+
+		  if(table_name.Contains("ff_download") && ff_attribute_flag == 1){
+		    if(ff_check % 2 != 0){
+		      tmp_path = ff_download_val[1];
+		      tmp_start_time = ff_download_val[2];
+		      tmp_end_time = ff_download_val[3];
+		      tmp_received_bytes = ' ';
+		      tmp_total_bytes = ff_download_val[4];
+		      tmp_origin = ' ';		          
+		      //ff_insert_query += ");";
+
+		      union_insert_q += tmp_path + "','" + tmp_start_time + "','" + tmp_end_time + "','" + tmp_received_bytes + "','" + tmp_total_bytes + "','" + tmp_origin + "');";
+		      copy_cmd.ExecuteNonQuery(union_insert_q);
+		    }
+		    ff_check++;
+		  }
+		  else if(table_name.Contains("download")){		      
+		    union_insert_q += tmp_path + "','" + tmp_start_time + "','" + tmp_end_time + "','" + tmp_received_bytes + "','" + tmp_total_bytes + "','" + tmp_origin + "');";
+		    Console.WriteLine(union_insert_q);
+		    copy_cmd.ExecuteNonQuery(union_insert_q);
+		  }
+		  else{
+		    for(int i=0;i<field_arr.Count();i++){
+		      insert_query += field_arr[i];
+		      if(i != field_arr.Count()-1)
+		        insert_query += ",";
+		    }
+		    insert_query += ") values (";
+		    for(int i=0;i<field_val.Count();i++){
+		      insert_query += "\'" + field_val[i] + "\'";
+		      if(i != field_arr.Count()-1)
+		        insert_query += ",";
+		      if(i == 1)
+		        tmp_url = field_val[i];
+		      else{
+		        if(table_name == "Web_cr_visit" || table_name == "Web_op_visit"){
+		          if(i==5) tmp_time = field_val[i];
+		        }
+		        else if(table_name == "Web_ff_visit"){
+		          if(i==8) tmp_time = field_val[i];
+		        }
+		      }
+		    }
+		    insert_query += ");";
+		  }
+
+		  //f_flag = false;
+		  //Console.WriteLine(query);
+		}
+		copy.Close();
+		copy_db.Close();
+	}
+
+	void keyword_extract(SQLiteClass::DataReaderClass dataReader, String path, String table_name){
+		LocalFileClass lf = new LocalFileClass();	    
+	
+		ulong time;
+		DateClass date();
+
+		StringArr time_arr();
+		time_arr.Add("start_time");
+		time_arr.Add("end_time");
+		time_arr.Add("last_access_time");
+		time_arr.Add("last_visit_time");
+		time_arr.Add("dateAdded");
+		time_arr.Add("lastModified");
+		time_arr.Add("last_visit_date");
+
+		SQLiteClass copy = new SQLiteClass();
+		LocalFileClass copy_db = new LocalFileClass();
+		//if(!copy_db.Open(path + "\\history.sqlite", FileClass::APPEND))
+		if(!copy_db.Open("C:\\TimeLineArtifacts_Total.sqlite", FileClass::APPEND))
+		  Console.WriteLine("fail to open " + path + "\\" + path.GetFilename() +  "_history.sqlite");
+		if(!copy.Open(copy_db, SQLiteClass::SQLITE_OPEN_READWRITE))
+		  Console.WriteLine("fail to open history db " + path.GetFilename());
+		SQLiteClass::CommandClass copy_cmd = new SQLiteClass::CommandClass();
+		if(!copy.CreateCommand(copy_cmd))
+		  Console.WriteLine("fail to create command");
+
+		String host_table = table_name.SubString(0,6)+"_host";
+		table_name = table_name.SubString(0,7) + table_name.SubString(table_name.Find("keyword"),7);
+		String browser = "";
+		bool set_table = true;
+		if(table_name == "Web_cr_keyword"){
+		  browser = "Chrome";
+		  //set_table = copy_cmd.ExecuteNonQuery("CREATE TABLE "+table_name+"(id INTEGER PRIMARY KEY AUTOINCREMENT,url LONGVARCHAR,keywords LONGVARCHAR,title LONGVARCHAR,visit_count INTEGER DEFAULT 0 NOT NULL,typed_count INTEGER DEFAULT 0 NOT NULL,last_visit_time LONGVARCHAR NOT NULL,hidden INTEGER DEFAULT 0 NOT NULL);");
+		}
+		else if(table_name == "Web_ff_keyword"){
+		  browser = "Firefox";
+		  //set_table = copy_cmd.ExecuteNonQuery("CREATE TABLE "+table_name+" (   id INTEGER PRIMARY KEY, url LONGVARCHAR, keywords LONGVARCHAR, title LONGVARCHAR, rev_host LONGVARCHAR, visit_count INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0 NOT NULL, typed INTEGER DEFAULT 0 NOT NULL, frecency INTEGER DEFAULT -1 NOT NULL, last_visit_date LONGVARCHAR , guid TEXT, foreign_count INTEGER DEFAULT 0 NOT NULL, url_hash INTEGER DEFAULT 0 NOT NULL );");
+		}
+		else if(table_name == "Web_op_keyword"){
+		  browser = "Opera";
+		  //set_table = copy_cmd.ExecuteNonQuery("CREATE TABLE "+table_name+"(id INTEGER PRIMARY KEY AUTOINCREMENT,url LONGVARCHAR,keywords LONGVARCHAR,title LONGVARCHAR,visit_count INTEGER DEFAULT 0 NOT NULL,typed_count INTEGER DEFAULT 0 NOT NULL,last_visit_time LONGVARCHAR NOT NULL,hidden INTEGER DEFAULT 0 NOT NULL)");
+		}
+
+		while(dataReader.Read()){
+		  String query = "";
+		  String field = "";
+		  uint fieldCnt;
+		  bool flag = false;
+		  StringArr field_arr();
+		  StringArr field_val();
+		  String insert_query = "";
+		  String union_insert_q = "insert into Web_Keyword (Browser, url, keyword, title, time) values (\'" + browser + "\',\'";
+		  String union_url = "";
+		  String union_keyword = "";
+		  String union_title = "";
+		  String union_time = "";
+
+		  bool readData = dataReader.GetFieldCount(fieldCnt);
+		  for(int i=0;i<fieldCnt;i++){
+		    String fieldName;
+		    variant v;
+		    String url_ex;
+		    String key;
+		    String search_key;
+		    uint idx,q_idx;
+		    SQLiteClass::DataReaderClass::DataTypes fieldType;
+		    readData = dataReader.GetFieldName(i, fieldName);
+		    readData = dataReader.Get(i,v);
+
+		    field += fieldName + "\t";
+		    //query += v.GetString() + "\t";
+		    field_arr.Add(fieldName);
+		    //field_val.Add(v.GetString());
+
+		    if(fieldName == "url"){
+		      url_ex = v.GetString();
+		      field_val.Add(url_ex);
+		      union_url = url_ex;
+		      query += url_ex + "\t";
+		      //host_extract(url_ex, host, host_fre);
+		      if(url_ex.Contains("&q=") || url_ex.Contains("&query=") || url_ex.Contains("&search_query=") || url_ex.Contains("?q=") || url_ex.Contains("?query=") || url_ex.Contains("?search_query=")){
+		        field += "search_keyword" + "\t";
+		        field_arr.Add("keywords");
+		        if(url_ex.Contains("&q=")){
+		          q_idx = url_ex.Find("&q=");
+		          key = url_ex.SubString(q_idx+3,-1);
+
+		          //Console.WriteLine(key);
+		        }
+		        else if(url_ex.Contains("&query=")){
+		          q_idx = url_ex.Find("&query=");;
+		          key = url_ex.SubString(q_idx+7,-1);
+		          //idx = key.Find("&");
+		          //search_keyword = key.SubString(0,idx);
+		          //Console.WriteLine(key);
+		          //Console.WriteLine(search_keyword);
+		        }
+		        else if(url_ex.Contains("&search_query=") || url_ex.Contains("?search_query=")){
+		          q_idx = url_ex.Find("&search_query=");
+		          key = url_ex.SubString(q_idx+14,-1);
+		          //Console.WriteLine(key);
+		        }
+		        else if(url_ex.Contains("?q=")){
+		        	q_idx = url_ex.Find("?q=");
+		        	key = url_ex.SubString(q_idx+3,-1);
+		        }
+		        else if(url_ex.Contains("?query=")){
+		        	q_idx = url_ex.Find("?query=");
+		        	key = url_ex.SubString(q_idx+7,-1);
+		        }
+		        else if(url_ex.Contains("?search_query=")){
+		        	q_idx = url_ex.Find("?search_query=");
+		        	key = url_ex.SubString(q_idx+14,-1);
+		        }		        	
+
+		        if(key.Find("&")){
+		          if(0 < key.Find("&"))
+		            idx = key.Find("&");
+		          else
+		            idx = -1;
+		        }
+		        else
+		          idx = -1;
+		        search_key = key.SubString(0,idx);
+		        union_keyword = search_key;
+		        //Console.WriteLine("{0} {1} {2}",q_idx,idx,search_key);
+		        query += search_key + "\t";
+		        field_val.Add(search_key);
+		        //Console.WriteLine(query);
+		        flag = true;
+		      }
+		    }
+		    else if(time_arr.Find(fieldName) != -1){
+		      time = ulong::Convert(v.GetString(), int::DECIMAL);
+		      if(table_name.Contains("cr") || table_name.Contains("op")){
+		        date.SetUnix(time/1000000 - 11644473600);
+		      }
+		      else if(table_name.Contains("ff")){
+		        date.SetUnix(time/1000000);
+		      }
+		      String date_str = date.GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600);
+		      query += date_str + "\t";
+		      field_val.Add(date_str);
+		      union_time = date_str;
+		    }
+		    else{
+		      if(fieldName == "title") union_title = v.GetString();
+		      query += v.GetString() + "\t";
+		      field_val.Add(v.GetString());
+		    }
+		  }
+		  
+
+		  if(flag){
+		    union_insert_q += union_url + "\',\'" + union_keyword + "\',\'" + union_title + "\',\'" + union_time + "\');";
+		    //Console.WriteLine(union_insert_q);	        
+		    copy_cmd.ExecuteNonQuery(union_insert_q);
+
+		  }
+
+		  flag = false;
+		  //f_flag = false;
+		}
+		//Console.WriteLine(path);
+
+		copy.Close();
+		copy_db.Close();
+		lf.Close();
+	}
+
+	void visit_csv(CaseClass c, String path, String full_path){
+		String table_name;
+		LocalFileClass db = new LocalFileClass();
+		SQLiteClass sql = new SQLiteClass();
+		LocalFileClass result = new LocalFileClass();
+		ConnectionClass conn = LocalMachine;
+		conn.CreateFolder(full_path + "\\visit", ConnectionClass::CREATEFOLDERALL);
+
+		table_name = "Web_";
+
+		if(path.Contains("Chrome")){
+		  result.Open(full_path + "\\visit" + "\\Chrome_history.csv", FileClass::WRITE + FileClass::TEXT);
+		  table_name += "cr_visit";
+		}
+		else if(path.Contains("FF_History")){
+		  result.Open(full_path + "\\visit" + "\\FF_history.csv", FileClass::WRITE + FileClass::TEXT);
+		  table_name += "ff_visit";
+		}
+		else if(path.Contains("Opera_History")){
+		  result.Open(full_path + "\\visit" + "\\Opera_history.csv", FileClass::WRITE + FileClass::TEXT);
+		  table_name += "op_visit";
+		}
+
+		if(db.Open(path)){
+		  if(sql.Open(db, SQLiteClass::SQLITE_OPEN_READONLY)){
+		    SQLiteClass::CommandClass cmd = new SQLiteClass::CommandClass();
+		    if(sql.CreateCommand(cmd)){
+		      bool queryTable = true;
+		      SQLiteClass::DataReaderClass dataReader = new SQLiteClass::DataReaderClass();
+		      if(path.Contains("Chrome_History") || path.Contains("Opera_History"))
+		        queryTable = cmd.ExecuteQuery("select * from urls;", dataReader);
+		      else if(path.Contains("FF_History"))
+		        queryTable = cmd.ExecuteQuery("select * from moz_places;", dataReader);
+
+		      if(queryTable){
+		          sql2csv(dataReader, result, full_path, table_name);
+		          keyword_extract(dataReader, full_path, table_name + "_keyword");
+		      }
+		      else
+		        Console.WriteLine("[-] query error!\n");
+		    }
+		    else
+		      Console.WriteLine("[-] fail to create command!\n");
+		  }
+		  else
+		    Console.WriteLine("[-] fail to open database!\n");
+		}
+		else
+		  Console.WriteLine("[-] fail to open local database file!\n");
+	}
+
+	void download_csv(CaseClass c, String path, String full_path){
+	    String table_name;
+	    LocalFileClass db = new LocalFileClass();
+	    SQLiteClass sql = new SQLiteClass();
+	    LocalFileClass result = new LocalFileClass();
+	    ConnectionClass conn = LocalMachine;
+	    conn.CreateFolder(full_path + "\\downloads", ConnectionClass::CREATEFOLDERALL);
+
+	    table_name = "Web_";
+
+	    if(path.Contains("Chrome"))
+	      result.Open(full_path + "\\downloads" + "\\Chrome_download.csv", FileClass::WRITE + FileClass::TEXT);
+	    else if(path.Contains("FF_History"))
+	      result.Open(full_path + "\\downloads" + "\\FF_download.csv", FileClass::WRITE + FileClass::TEXT);
+	    else if(path.Contains("Opera_History"))
+	      result.Open(full_path + "\\downloads" + "\\Opera_download.csv", FileClass::WRITE + FileClass::TEXT);
+
+	    if(db.Open(path)){
+	        if(sql.Open(db, SQLiteClass::SQLITE_OPEN_READONLY)){
+	          SQLiteClass::CommandClass command = new SQLiteClass::CommandClass();
+	          if(sql.CreateCommand(command)){
+	            bool queryTable = true;
+	            SQLiteClass::DataReaderClass dataReader = new SQLiteClass::DataReaderClass();
+	            if(path.Contains("Chrome_History")){
+	              table_name += "cr_download";
+	              queryTable = command.ExecuteQuery("select * from downloads;", dataReader);
+	            }
+	            if(path.Contains("Opera_History")){
+	              table_name += "op_download";
+	              queryTable = command.ExecuteQuery("select * from downloads;", dataReader);
+	            }
+	            else if(path.Contains("FF_History")){
+	              table_name += "ff_download";
+	              queryTable = command.ExecuteQuery("select * from moz_annos;", dataReader);
+	            }
+
+	            if(queryTable){
+	              download_sql2csv(dataReader, result, full_path, table_name);
+	            }
+	            else
+	             Console.WriteLine("[-] queyr error!\n");
+	          }
+	          else
+	            Console.WriteLine("[-] fail to create command\n");
+	        }
+	        else
+	          Console.WriteLine("[-] fail to open database\n");
+	    }
+	    else
+	      Console.WriteLine("[-] fail to open local database!\n");
+
+	  }
+
+
+	  String IE_timeformat(String s){
+	    String mon = s.SubString(0,2);
+	    String day = s.SubString(3,2);
+	    String year = "20"+s.SubString(6,2);
+	    String time = s.SubString(9,8);
+
+	    String hh = s.SubString(18,2);
+	    if(hh == "오후"){
+	      int hour_int = int::Convert(time.SubString(0,2),int::DECIMAL);
+	      hour_int += 12;
+	      String hour_str = String::FormatInt(hour_int,int::DECIMAL);
+	      time = hour_str + time.SubString(2,-1);
+	    }
+
+	    String str = year+"-"+mon+"-"+day+" "+time;
+	    DateClass date();
+	    date.Set(str);
+	    String date_str = date.GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600);
+	    //Console.WriteLine(date_str);
+	    return date_str;
+	  }
+
+	  String IE_search(String url){
+	    String key, search_key;
+	    int idx;
+	    if(url.Contains("&q=") || url.Contains("&query=") || url.Contains("&search_query=") || url.Contains("?q=") || url.Contains("?query=") || url.Contains("?search_keyword=")){
+	      if(url.Contains("&q="))
+	        key = url.SubString(url.Find("&q=")+3, -1);
+	      else if(url.Contains("&query="))
+	        key = url.SubString(url.Find("&query=")+7, -1);
+	      else if(url.Contains("&search_query="))
+	        key = url.SubString(url.Find("&search_query=")+14, -1);
+	      else if(url.Contains("?q="))
+	      	key = url.SubString(url.Find("?q=")+3, -1);
+	      else if(url.Contains("?query="))
+	      	key = url.SubString(url.Find("?query=")+7,-1);
+	      else if(url.Contains("?search_query="))
+	      	key = url.SubString(url.Find("?search_query=")+14,-1);
+
+	      if(key.Find("&") >= 0)
+	        idx = key.Find("&");
+	      else
+	        idx = -1;
+
+	      search_key = key.SubString(0, idx);
+	      //Console.WriteLine(search_key);
+	      return search_key;
+	    }
+	    else
+	      return 0;
+	  }
+
+	  void IE_index_dat(CaseClass c, String path, String full_path){
+	    String browser = "IE";
+	    LocalFileClass idx_dat = new LocalFileClass();
+	    LocalFileClass result = new LocalFileClass();
+	    LocalFileClass result_search = new LocalFileClass();
+	    LocalFileClass portal = new LocalFileClass();
+
+	    StringArr host();
+	    IntArr host_fre();
+
+	    LocalFileClass db = new LocalFileClass();
+	    SQLiteClass sql = new SQLiteClass();
+	    SQLiteClass::CommandClass cmd = new SQLiteClass::CommandClass();
+
+	    //db.Open(full_path + "\\internet_explorer_history\\index_history.sqlite", FileClass::APPEND);
+	    db.Open("C:\\TimeLineArtifacts_Total.sqlite", FileClass::APPEND);
+	    sql.Open(db, SQLiteClass::SQLITE_OPEN_READWRITE);
+	    sql.CreateCommand(cmd);
+
+
+	    if(!idx_dat.Open(path, FileClass::TEXT)){
+	      Console.WriteLine("[-] fail to open index.dat\n");
+	      return;
+	    }
+
+	    String query = "FRAME\tTIME\tVISITED_URL\t";
+	    
+
+	    uint sign = 0, idx;
+	    String search_key;
+	    String url_str, key;
+	    uint v;
+	    while(idx_dat.More()){
+	      v = idx_dat.Get();
+	      //Console.WriteLine(v);
+	      if(v == 0x55){
+	        v = idx_dat.Get();
+	        if(v == 0x52){
+	          v = idx_dat.Get();
+	          if(v == 0x4c){
+	            v = idx_dat.Get();
+	            if(v == 0x20){
+	                uint ptr = idx_dat.GetPos();
+	                uint rec_size;
+	                rec_size = idx_dat.ReadBinaryInt(4, 0) * 128;
+	                ulong time_num;
+	                //time_num = idx_dat.ReadBinaryInt(8, 0);
+	                DateClass date();
+	                idx_dat.ReadWinDate(date);
+	                String time = IE_timeformat(date.GetString());
+
+	                idx_dat.Seek(idx_dat.GetPos()+36);
+	                uint name_offset = idx_dat.ReadBinaryInt(4,0);
+	                idx_dat.Seek(ptr+name_offset-4);
+	                String url_str;
+	                idx_dat.ReadString(url_str,rec_size-name_offset,"\x00");
+	                query = sign + "\t" + time + "\t" + url_str + "\t";
+	                String insert_query = "insert into Web_ie_index_visit(frame, url, time) values(" + sign + ",\'" + url_str + "\',\'" + time + "\');";
+	                String union_visit_q = "insert into Web_Visit(Browser, url, title, time) values('IE','" + url_str + "','" + " ','" + time + "');";	                
+	                cmd.ExecuteNonQuery(union_visit_q);
+	                sign++;	                
+	                search_key = IE_search(url_str);
+	                host_extract(url_str, host, host_fre);
+	                //Console.WriteLine(search_key);
+	                if(search_key != 0){
+	                  insert_query = "insert into Web_ie_index_keyword(frame, url, keyword, time) values(" + sign + ",\'" + url_str + "\',\'" + search_key  + "\',\'" + time + "\');";
+	                  String union_insert_q = "insert into Web_Keyword(Browser, url, keyword, title, time) values('IE','" + url_str + "','" + search_key + "',' ', '" + time + "');";
+	                  query += search_key;
+	                  Console.WriteLine(union_insert_q);
+	                  //cmd.ExecuteNonQuery(insert_query);	                  
+	                  //cmd.ExecuteNonQuery(union_insert_q);
+	                  
+	                }
+	            }
+	          }
+	        }
+	      }
+	    }
+	    Console.WriteLine(path);
+	    for(int i=0;i<host.Count();i++){
+	      String fre_query = host[i] + "\t" + host_fre[i] + "\t";
+	      String insert_query = "insert into Web_ie_index_host(host, visit_count) values(\'" + host[i] + "\'," + host_fre[i] + ");";
+	      String union_host_q = "insert into Web_Host(Browser, host, visit_count) values('IE', '" + host[i] + "','" + host_fre[i] + "');";
+	      //cmd.ExecuteNonQuery(insert_query);
+	      cmd.ExecuteNonQuery(union_host_q);	      
+	      //Console.WriteLine(fre_query);
+	    }
+	    
+	    idx_dat.Close();
+	    sql.Close();
+	    db.Close();
+	  }
+
+	  void IE_WebCache_dat(CaseClass c, String path, String full_path) {
+	      String browser = "IE";
+	      LocalFileClass webcache_dat = new LocalFileClass();
+	      LocalFileClass result = new LocalFileClass();
+	      LocalFileClass result_search = new LocalFileClass();
+	      LocalFileClass result_down = new LocalFileClass();
+	      LocalFileClass portal = new LocalFileClass();
+
+	      LocalFileClass db = new LocalFileClass();
+	      SQLiteClass sql = new SQLiteClass();
+	      SQLiteClass::CommandClass cmd = new SQLiteClass::CommandClass();
+
+	      //db.Open(full_path + "\\internet_explorer_history\\webcache_history.sqlite", FileClass::APPEND);
+	      db.Open("C:\\TimeLineArtifacts_Total.sqlite", FileClass::APPEND);
+	      sql.Open(db, SQLiteClass::SQLITE_OPEN_READWRITE);
+	      sql.CreateCommand(cmd);
+
+	      StringArr host();
+	      IntArr host_fre();
+
+	      SearchClass search();
+	      SearchClass search_container();
+
+	      LocalFileClass ef();	     	    
+	      
+	      search.AddKeyword("\\x11\\x7F\\x77\\x00", KeywordClass::GREP);
+	      search_container.AddKeyword("\\x48\\x00\\x69\\x00\\x73\\x00\\x74\\x00\\x6F\\x00\\x72\\x00\\x79\\x00", KeywordClass::GREP);
+	      search_container.AddKeyword("\\x69\\x00\\x65\\x00\\x64\\x00\\x6F\\x00\\x77\\x00\\x6E\\x00\\x6C\\x00\\x6F\\x00\\x61\\x00\\x64\\x00", KeywordClass::GREP); //iedownload
+	      
+
+	       if(ef.Open(path))  {
+	           //Console.WriteLine("success to open {0}", ef.FullPath());
+	           //Console.WriteLine("size : {0}", ef.GetSize());
+	           int history_id, download_id;
+
+	           if (search_container.Find(ef, -1, -1, SearchClass::STATUSUPDATE) > 0)  { // 이알고리즘 없애면  LOW/History.IE5 도 나옴.
+	                //Console.WriteLine("searching");
+	                foreach (SearchClass::HitClass hit in search_container.GetHits())  {
+
+	                         String Container_name;
+	                         int Partitaion_id , value ;
+	                         ef.Seek(hit.Offset()), ef.ReadString(Container_name);
+	                         ef.Skip(0x09), Partitaion_id = ef.ReadBinaryInt(1);
+	                         ef.Skip(0x06), value = ef.ReadBinaryInt(1);
+	                         //Console.WriteLine("p_id : {0}\tvalue : {1}\tcontainer name : {2}",Partitaion_id, value, Container_name);
+	                         if((Container_name == "History" || Container_name == "iedownload") && Partitaion_id == 77 && value == 58){ //  L
+	                            ef.Seek(hit.Offset() - 0x37);
+	                            if(Container_name == "History")
+	                            	history_id = ef.ReadBinaryInt(1);
+	                              //Console.WriteLine("historyID : {0}",history_id);
+	                            else if(Container_name == "iedownload")
+	                            	download_id = ef.ReadBinaryInt(1);
+	                         }
+
+	                }
+	            }
+
+	            ef.Seek(0);
+
+
+	            if (search.Find(ef, -1, -1, SearchClass::STATUSUPDATE) > 0)  {
+	                  int cnt = 0;
+	                  foreach (SearchClass::HitClass hit in search.GetHits())  {
+	                       if (hit.KeywordIndex() == 0 ) {
+	                          String url;
+	                          int id , AccessCount;
+
+
+	                          ef.Seek(hit.Offset() + 12), id = ef.ReadBinaryInt(8);
+	                          ef.Seek(hit.Offset() + 56), AccessCount = ef.ReadBinaryInt(4);
+	                          DateClass Access_date();
+	                          ef.Seek(hit.Offset() + 92), ef.ReadWinDate(Access_date);
+	                          
+	                          if(id == history_id) {	                               
+	                                String search_key, title, query;
+	                                ef.Seek(hit.Offset() + 128), ef.ReadString(url);
+	                                ef.Skip(0x61), ef.ReadString(title);
+	                                if(url.SubString(0,7) == "Visited"){
+	                                
+	                                  String date = IE_timeformat(Access_date.GetString());
+	                                  query = cnt + "\t" + date + "\t" + url + "\t" + title + "\t";
+	                                  String insert_query = "insert into Web_ie_webcache_visit(frame, url, title, time) values(" + cnt + ",\'" + url + "\',\'" + title + "\',\'" + date + "\');";
+	                                  String union_visit_q = "insert into Web_Visit('IE','" + url + "','" + title + "','" + date + "');";
+	                                  //new WindowsWebListClass(Web_dialog.List, browser, url, date);
+	                                  cmd.ExecuteNonQuery(union_visit_q);
+	                                  	                                  
+	                                  search_key = IE_search(url);
+	                                  host_extract(url, host, host_fre);
+	                                  if(search_key != 0){
+	                                    query = cnt + "\t" + date + "\t" + url + "\t" + search_key + "\t" + title + "\t";
+	                                    String insert_query = "insert into Web_ie_webcache_keyword(frame, url, keyword, title, time) values(" + cnt + ",\'" + url + "\',\'" + search_key + "\',\'" + title + "\',\'" + date + "\');";
+	                                    String union_insert_q = "insert into Web_Keyword(Browser, url, keyword, title, time) values('IE','" + url + "','" + search_key + "','" + title + "','" + date + "');";	                                    
+	                                    cmd.ExecuteNonQuery(union_insert_q);
+	                                  }
+	                                  cnt++;
+	                                }
+	                          }
+	                          else if(id == download_id){
+	                          	String app, cache, url, down_url, path, query;
+	                            ef.Seek(hit.Offset() + 0x235), ef.ReadString(url);
+	                            if(url.SubString(0,7) == "Visited"){
+	                              ef.ReadString(app);
+	                              ef.ReadString(cache);
+	                              ef.ReadString(down_url);
+	                              ef.ReadString(path);
+	                              String date = IE_timeformat(Access_date.GetString());
+	                              query = cnt + "\t" + date + "\t" + app + "\t" + path + "\t" + down_url + "\t" + url  + "\t";
+	                              String insert_query = "insert into Web_ie_download(frame, url, app, down_url, path, time) values(" + cnt + ",\'" + url + "\',\'" + app + "\',\'" + down_url + "\',\'" + path + "\',\'" + date + "\');";
+	                              String union_insert_q = "insert into Web_Download(Browser, Path, StartTime, EndTime, RecvBytes, TotalBytes, Url) values ('IE','" + path + "','" + date + "',' ','" + down_url + "');";                                  
+	                              cmd.ExecuteNonQuery(union_insert_q);
+	                              cnt++;
+	                            }
+	                          }
+	                       }
+	                    }
+	            }
+
+	            for(int i=0;i<host.Count();i++){
+	              String fre_query = host[i] + "\t" + host_fre[i] + "\t";
+	              String insert_query = "insert into Web_ie_webcache_host(host, visit_count) values(\'" + host[i] + "\'," + host_fre[i] + ");";
+	              String union_host_q = "insert into Web_Host(Browser, host, visit_count) values('IE','" + host[i] + "','" + host_fre[i] + "');";
+	              cmd.ExecuteNonQuery(union_host_q);
+	            }
+	            ef.Close();
+	            sql.Close();
+	            db.Close();
+
+	       }
+
+	  }
+
+	void export_file(CaseClass c, EntryClass e, String f_name){
+	    String root_path = c.ExportFolder() + "\\Web_History";
+	    String sub_path;
+	    String full_path;
+	    String sub_folder, dst_fn;
+	    ConnectionClass conn = LocalMachine;
+	    conn.CreateFolder(root_path, ConnectionClass::CREATEFOLDERALL);
+	    //Console.WriteLine("[+] Case path : {0}",c.Path());
+	    EntryFileClass ef();
+	    uint opts;
+	    if(ef.Open(e, FileClass::WRITE)){
+	      String contents;
+	      variant val;
+	      ef.SetCodePage(CodePageClass::ANSI);
+	      ef.ReadBinary(val);
+	      //ef.ReadString(contents);
+	      LocalFileClass lf();
+	      SQLiteClass sql = new SQLiteClass();
+	      LocalFileClass result = new LocalFileClass();
+
+
+	      //result.Open(c.ExportFolder() + "\\web_download.csv", FileClass::WRITE);
+	      LocalFileClass db = new LocalFileClass();
+	      if(f_name.Contains("Chrome_History"))
+	        sub_path = "\\Chrome";
+	      else if(f_name.Contains("FF_History"))
+	        sub_path = "\\FireFox";
+	      else if(f_name.Contains("Opera_History"))
+	        sub_path = "\\Opera";
+	      else if(f_name.Contains("IE_Index")){
+	        sub_path = "\\Internet Explorer";
+	        sub_folder = e.TruePath().GetFilePath().GetFilename();
+	        if(sub_folder != "History.IE5")
+	          f_name = sub_folder + "_history";
+	        else
+	          f_name = "IE_history";
+	      }
+	      else if(f_name.Contains("IE_WebCache"))
+	        sub_path = "\\Internet Explorer";
+
+
+	      full_path = root_path + sub_path;
+	      conn.CreateFolder(full_path, ConnectionClass::CREATEFOLDERALL);
+	      if(lf.Open(full_path + "\\" + f_name, FileClass::WRITE)){
+	        lf.WriteBuffer(ef);
+	        String path = lf.Name();
+	        Console.WriteLine("File Exported : {0}", path);
+	        lf.Close();
+	        if(!lf.Name().Contains("Internet Explorer")){
+	          visit_csv(c, path, full_path);
+	          download_csv(c, path, full_path);
+	        }
+	        else if(f_name.Contains("_history")){
+	          IE_index_dat(c, path, full_path);
+	        }
+	        else if(f_name.Contains("IE_WebCache")){
+	          IE_WebCache_dat(c, path, full_path);
+	        }
+	      }
+	      else{
+	        Console.WriteLine("[-] Fail to open local file");
+	      }
+	    }
+	    else{
+	      //Console.WriteLine("Could not open {0}", e.TruePath());
+
+	      Console.WriteLine("[+] sql to csv script finish\n");
+	    }
+	    //f_flag = true;
+	  }
+
+	void WebArtifact(EntryClass e){
+		if(e.Name() == "History" || e.Name() == "places.sqlite" || e.Name() == "index.dat" || e.Name().Contains("WebCacheV")){
+	      if(e.TruePath().Contains("Google\\Chrome\\User Data\\")){             
+	        export_file(c, e, "Chrome_History");
+	        Console.WriteLine("[+] Chrome History export done\n");
+	      }
+	      else if(e.TruePath().Contains("Roaming\\Mozilla\\Firefox\\Profiles")){ // places.sqlite 에 visit history/download history 저장            
+	        export_file(c, e, "FF_History");
+	        Console.WriteLine("[+] Firefox History export done\n");
+	      }
+	      else if(e.TruePath().Contains("Roaming\\Opera Software\\Opera Stable")){ // History 에 visit history / download history 저장            
+	        export_file(c, e, "Opera_History");
+	        Console.WriteLine("[+] Opera History export done\n");
+	      }
+	      else if(e.TruePath().Contains("Local\\Microsoft\\Windows\\History\\History.IE5") &&  e.TruePath().Contains("C\\Users")){            
+	        export_file(c, e, "IE_Index");
+	        Console.WriteLine("[+] Internet Explorer export done\n");
+	      }
+	      else if(e.Name().Contains("WebCacheV") && e.Extension() == "dat" && e.TruePath().Contains("\\Microsoft\\Windows")){            
+	        export_file(c, e, "IE_WebCache");
+	        Console.WriteLine("[+] Internet Explorer export done\n");
+	      }
+	    }
+	}
+
+	virtual void Run(){
+		while(IsRunning()){
+			int StatusWindowMax;
+			int StatusWindowStatus;
+			int OnePercent;
+
+			TimeLine_dialog.time_reset = true;
+			TimeLine_dialog.time_check = true;
+			
+			//SystemClass::Message(SystemClass::ICONINFORMATION, "Notice", "Wait a second..");
+			String exportPath = "C:\\TimeLineArtifacts_Total.sqlite";
+			LocalFileClass sqliteFile();
+			SQLiteClass sqliteDB();
+			SQLiteClass::CommandClass cmd();
+
+			sqliteFile.Open(exportPath, FileClass::WRITE);
+			sqliteDB.Open(sqliteFile, SQLiteClass::SQLITE_OPEN_READWRITE);
+			sqliteDB.CreateCommand(cmd);
+
+			cmd.ExecuteNonQuery("CREATE TABLE PC_PowerOnOff (id INTEGER PRIMARY KEY, EventID LONGVARCHAR, Computer LONGVARCHAR, Event LONGVARCHAR, EventTime LONGVARCHAR, SID LONGVARCHAR, GUID LONGVARCHAR);");
+			cmd.ExecuteNonQuery("CREATE TABLE PC_LogOnOff (id INTEGER PRIMARY KEY, EventID LONGVARCHAR, LogonID LONGVARCHAR, User LONGVARCHAR, Event LONGVARCHAR, EventTime LONGVARCHAR, NetworkAddress LONGVARCHAR,  LogonType LONGVARCHAR, SID LONGVARCHAR, GUID LONGVARCHAR);");			
+			cmd.ExecuteNonQuery("CREATE TABLE IF NOT EXISTS App_EXEFile (id INTEGER PRIMARY KEY, SourceFile LONGVARCHAR, FileName LONGVARCHAR, CreatedTime LONGVARCHAR,  FileSize LONGVARCHAR, RunCount LONGVARCHAR, FilePath LONGVARCHAR);");
+			cmd.ExecuteNonQuery("CREATE TABLE App_Documents (Viewer LONGVARCHAR, Name LONGVARCHAR, mtime LONGVARCHAR, atime LONGVARCHAR, ctime LONGVARCHAR, FileSize LONGVARCHAR, DriveType LONGVARCHAR, Path LONGVARCHAR);");
+			cmd.ExecuteNonQuery("CREATE TABLE USB_EventLog (id INTEGER PRIMARY KEY, Vendor LONGVARCHAR, Product LONGVARCHAR, State LONGVARCHAR, GeneratedTime LONGVARCHAR, WrittenTime LONGVARCHAR, FirmwareRevision LONGVARCHAR, SerialNumber LONGVARCHAR, LifeTimeGUID LONGVARCHAR, SourceGUID LONGVARCHAR, Source LONGVARCHAR, Computer LONGVARCHAR, SID LONGVARCHAR);");
+			cmd.ExecuteNonQuery("CREATE TABLE PC_UserAccount (id INTEGER PRIMARY KEY, User LONGVARCHAR, RID LONGVARCHAR, LogonCount LONGVARCHAR,  InvalidLogonCount LONGVARHAR,  LastLogonTime LONGVARCHAR, InvalidLogonTime LONGVARCHAR, LastPasswordChangedTime LONGVARCHAR, ExpiredTime LONGVARCHAR,  PasswordExpiredTime LONGVARCHAR, FullName LONGVARCHAR, Description LONGVARCHAR, HomeDirectory LONGVARCHAR, LMHash LONGVARCHAR, NTHash LONGVARCHAR, Activation LONGVARCHAR, UserPrivilege LONGVARCHAR, CountryCode LONGVARCHAR  );");
+			cmd.ExecuteNonQuery("CREATE TABLE Web_Download (Browser LONGVARCHAR, Path LONGVARCHAR, StartTime LONGVARCHAR, EndTime LONGVARCHAR, RecvBytes LONGVARCHAR, TotalBytes, Url LONGVARCHAR);");
+			cmd.ExecuteNonQuery("CREATE TABLE Web_Keyword (Browser LONGVARCHAR, url LONGVARCHAR, keyword LONGVARCHAR, title LONGVARCHAR, time LONGVARCHAR);");
+			cmd.ExecuteNonQuery("CREATE TABLE File_Deleted (id INTEGER PRIMARY KEY, FileName LONGVARCHAR, FileExt LONGVARCHAR, FileCategory LONGVARCHAR, FileProperty LONGVARCHAR, FileSize LONGVARCHAR, AccessedTime LONGVARCHAR, CreatedTime LONGVARCHAR, WrittenTime LONGVARCHAR, FilePath LONGVARCHAR);"); // MD5HashValue LONGVARCHAR);");			
+
+			String lnk_path = c.ExportFolder() + "\\link_files";
+	        String lnk_csv_path = c.ExportFolder() + "\\lnk_parse.csv";
+	        ConnectionClass conn = LocalMachine;
+	        conn.CreateFolder(lnk_path, ConnectionClass::CREATEFOLDERALL);
+	        conn.Close();
+
+	        LocalFileClass lnk_csv = new LocalFileClass();
+	        lnk_csv.Open(lnk_csv_path, FileClass::WRITE + FileClass::TEXT);
+	        lnk_csv.WriteLine("FILE NAME\tFILE SIZE\tDRIVE TYPE\tMTIME\tATIME\tCTIME\tLOCAL PATH\t");
+
+	        for(ItemIteratorClass iter(c,0,ItemIteratorClass::CURRENTVIEW_SELECTED); DeviceClass dev = iter.GetNextDevice();){
+	        	EntryClass entryRoot = dev.GetRootEntry();
+	        	StatusWindowMax = entryRoot.CountAll(2, NodeClass::COUNTNODES | NodeClass::COUNTFOLDERS | NodeClass::COUNTRECURSIVE);	        	
+	        }
+
+	        StatusWindowMax = StatusWindowMax * 2;	        
+	        TimeLine_dialog.StatusWindow.SetLimit("Progress Status", StatusWindowMax);
+	        if(StatusWindowMax < 100) OnePercent = 1;
+	        else OnePercent = StatusWindowMax / 100;
+
+			for(ItemIteratorClass i(c,0,ItemIteratorClass::CURRENTVIEW_SELECTED); ItemClass item = i.GetNextItem();){
+				if((StatusWindowStatus++ % OnePercent) == 0){
+					TimeLine_dialog.StatusWindow.SetPosition(StatusWindowStatus);
+				}
+				EntryClass e = EntryClass::TypeCast(item);
+				String item_path = item.GetOriginalPath();
+
+				FileDeleted(item, cmd);
+				USBEventLog(e, cmd);
+				LogOn(e, cmd);
+				PowerOn(e, cmd);
+				UserAccount(e, cmd);
+				PrefetchEXE(e, cmd);
+				ExportLink(e, cmd, lnk_csv);
+				//WebArtifact(e);
+
+			}
+
+			lnk_csv.Close();
+			sqliteFile.Close();
+			sqliteDB.Close();
+
+			StringArr pp_list(), word_list(), excel_list(), hwp_list(), adobe_list();
+
+			for(ItemIteratorClass i(c,0,ItemIteratorClass::CURRENTVIEW_SELECTED); ItemClass item = i.GetNextItem();){
+				if((StatusWindowStatus++ % OnePercent) == 0){
+					TimeLine_dialog.StatusWindow.SetPosition(StatusWindowStatus);
+				}
+				EntryClass e = EntryClass::TypeCast(item);
+
+				if(e.IsVolume()){
+					Console.WriteLine("[+] recent document export");
+	                pp_doc(e, lnk_path, pp_list);
+	                word_doc(e, lnk_path, word_list);
+	                excel_doc(e, lnk_path, excel_list);
+	                hwp_doc(e, lnk_path, hwp_list);
+	                adobe_doc(e, lnk_path, adobe_list);
+
+	                Console.WriteLine("[+} PP");print_str_list(pp_list);
+	                Console.WriteLine("[+} Word");print_str_list(word_list);
+	                Console.WriteLine("[+} Excel");print_str_list(excel_list);
+	                Console.WriteLine("[+} HWP");print_str_list(hwp_list);
+	                Console.WriteLine("[+} ADOBE");print_str_list(adobe_list);
+
+	                Console.WriteLine("[+] recent document export done\n");
+				}
+				else
+					WebArtifact(e);				
+			}
+
+			sqliteFile.Open(exportPath, FileClass::APPEND);
+			sqliteDB.Open(sqliteFile, SQLiteClass::SQLITE_OPEN_READWRITE);
+			sqliteDB.CreateCommand(cmd);
+			
+			recent_lnk(lnk_path, lnk_csv_path, pp_list, word_list, excel_list, hwp_list, adobe_list, sqliteDB);
+
+			sqliteFile.Close();
+			sqliteDB.Close();
+
+			TimeLine_dialog.time_check = false;
+			TimeLine_dialog.Semaphore.Release();
+			break;
+		}
+
+		SystemClass::Message(SystemClass::ICONINFORMATION, "Notice", "Timeline Database Created");
+	}
+
+
+}
+
+class TimeLineDialogClass : DialogClass{	
+	TimeLineThreadClass			TimeLine_thread;
+	ThreadClass::SemaphoreClass	Semaphore;
+	ButtonClass					progress_button, view_button1, view_button2, view_button3, help_button;
+	CaseClass					c;
+	TimeLineWindow Window;
+	
+  int StatusWindowMax;
+  int StatusWindowStatus;
+  uint StatusWindowTimerId;
+  StatusWindowClass StatusWindow;
+
+	StaticTextClass RunningTime;
+	bool time_check, time_reset;
+    int hour, minute, second;
+
+    typedef String [] StringArr;
+    typedef int [] IntArr;
+	
+	TimeLineDialogClass(DialogClass parent, MainClass main, CaseClass c, BookmarkClass folder, int TreeViewSize):
+	DialogClass(parent, "Timeline"),
+	c=c;
+    StatusWindowMax = 200,
+    StatusWindowTimerId = 1024,
+	StatusWindow(this, "Progress Status", 5, 5, 250, 5, 0),
+	RunningTime(this, "", 325, 17, 40, DEFAULT, 0),
+	progress_button(this, "Build DB", 265, 15, 50, 10, 0),
+	view_button1(this, "View as Chrome", 370, 10, 100, 20, 0),
+	view_button2(this, "View as Internet Explorer", NEXT, 10, 100, 20, 0),
+	view_button3(this, "View as Mozilla FireFox", NEXT, 10, 100, 20, 0),
+	help_button(this, "Help", 720, 10, 30, 20, 0),
+	Window(this, START, NEXT, 750, 320, "KITRI BoB Shellock"),
+	TimeLine_thread(this, "", c, folder)
+	{		
+		Semaphore.Create(1,1);
+	}
+
+	virtual void ChildEvent(const EventClass &event){
+		if(help_button.Matches(event)){
+			LocalFileClass lf = new LocalFileClass();
+			lf.Open(c.ExportFolder() + "\\help.txt", FileClass::WRITE + FileClass::CRLF);
+			lf.SetCodePage (CodePageClass::UNICODE);
+
+			
+			lf.WriteLine("***********************************************************************************************************");
+			lf.WriteLine("* Title : Plain View of Multi Artifacts");					
+			lf.WriteLine("* File name : Plain View of Multi Artifacts.EnScript");						
+			lf.WriteLine("* Written by : Ham Seung Hun, Choi Jung Wan");
+			lf.WriteLine("* Version : 2.0");			
+			lf.WriteLine("* Created : December, 17th, 2017 ");						
+			lf.WriteLine("* Supported OS : Windows 7");	
+			lf.WriteLine("* Artifact List: System Information, File Entry, Link File, Prefetch File, USB registry, USB event log, ");
+			lf.WriteLine("* Power On/Off event log, Log On/Off event log, Web Visit, Web Keyword, Web Downloads, Recent Documents");	
+			lf.WriteLine("* Description : This script goes through all the evidence in the case");
+			lf.WriteLine("* and extract some important Artifacts and view the TimeLine as well.");						
+			lf.WriteLine("***********************************************************************************************************");	
+			lf.WriteLine();
+			lf.WriteLine("1. Click Build DB and Wait processing.\n");
+			lf.WriteLine("2. Choose the Browser to view TimeLine, and Click.\n");
+			lf.WriteLine("3. When the view popped up, Click the select file button.\n");
+			lf.WriteLine("4. Choose the SQLite file which already built by each process or by one button processing.\n");
+			lf.WriteLine("5. Select time to view or just click \"View TimeLine\" button.\n");
+			lf.WriteLine();
+			/*lf.WriteLine("1. Build DB 버튼을 클릭하고 완료될 때까지 기다린다.\n");
+			lf.WriteLine("2. 완료되면 원하는 브라우저에 따라 View as 버튼을 클릭한다.\n");
+			lf.WriteLine("3. 타임라인 웹뷰가 뜨면 C:\\TimeLineArtifacts_Total.sqlite 파일을 선택한다.\n");
+			lf.WriteLine("4. 원하는 시간을 선택하고 Start 버튼을 누른다.(시간을 선택하지 않으면 기본 설정에 따라 보여짐)\n");	*/
+			
+			lf.Close();
+
+			String path = c.ExportFolder() + "\\help.txt";
+			String cmd = "/C \"C:\\Windows\\System32\\notepad.exe\" " + path;
+
+			ExecuteClass exec();
+			exec.SetApplication("cmd.exe");
+			exec.SetFolder("C:\\windows\\system32");
+			exec.SetCommandLine(cmd);
+			exec.SetShow(false);
+			exec.Start(LocalMachine, 1000);		
+		}
+		
+		if(view_button1.Matches(event)){
+			String file_path = "C:\\PlainView.html";
+			SystemClass::Message(SystemClass::ICONINFORMATION,"Notice", file_path);
+		    DateClass start(), finish();
+		    start.Now();
+		
+		    //String cmd = "/C \"C:\\Program Files\\Internet Explorer\\iexplore.exe\" C:\\PlainView\\plainview.html";
+			String cmd = "/C \"C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe\" C:\\PlainView\\PlainView.html";
+		    Console.WriteLine(cmd);
+		    ExecuteClass exec();
+		    exec.SetApplication("cmd.exe");
+		    exec.SetFolder("C:\\windows\\system32");
+		    exec.SetCommandLine(cmd);
+		    exec.SetShow(false);
+		    exec.Start(LocalMachine, 1000);
+		    Console.WriteLine(exec.Output());
+
+		    //SystemClass::Message(ICONINFORMATION, "Notice", "Select \'C:\\TimeLineArtifacts.sqlite\'");
+		}
+
+		if(view_button2.Matches(event)){
+			String file_path = "C:\\PlainView.html";
+			SystemClass::Message(SystemClass::ICONINFORMATION,"Notice", file_path);
+		    //SystemClass::ClearConsole(SystemClass::SHOWCONSOLE);
+		    DateClass start(), finish();
+		    start.Now();
+	
+		    String cmd = "/C \"C:\\Program Files\\Internet Explorer\\iexplore.exe\" C:\\PlainView\\PlainView.html";
+			//String cmd = "/C \"C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe\" C:\\PlainView\\PlainView.html";
+		    Console.WriteLine(cmd);
+		    ExecuteClass exec();
+		    exec.SetApplication("cmd.exe");
+		    exec.SetFolder("C:\\windows\\system32");
+		    exec.SetCommandLine(cmd);
+		    exec.SetShow(false);
+		    exec.Start(LocalMachine, 1000);
+		    Console.WriteLine(exec.Output());
+
+		    //SystemClass::Message(ICONINFORMATION, "Notice", "Select \'C:\\TimeLineArtifacts.sqlite\'");
+		}
+		
+		if(view_button3.Matches(event)){
+			String file_path = "C:\\PlainView.html";
+			SystemClass::Message(SystemClass::ICONINFORMATION,"Notice", file_path);
+		    DateClass start(), finish();
+		    start.Now();
+	
+		    //String cmd = "/C \"C:\\Program Files\\Internet Explorer\\iexplore.exe\" C:\\PlainView\\plainview.html";
+			//String cmd = "/C \"C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe\" C:\\PlainView\\PlainView.html";
+			String cmd = "/C \"C:\\Program Files\\Mozilla Firefox\\firefox.exe\" C:\\PlainView\\plainview.html";
+		    Console.WriteLine(cmd);
+		    ExecuteClass exec();
+		    exec.SetApplication("cmd.exe");
+		    exec.SetFolder("C:\\windows\\system32");
+		    exec.SetCommandLine(cmd);
+		    exec.SetShow(false);
+		    exec.Start(LocalMachine, 1000);
+		    Console.WriteLine(exec.Output());
+
+		    //SystemClass::Message(ICONINFORMATION, "Notice", "Select \'C:\\TimeLineArtifacts.sqlite\'");
+		}
+		if (progress_button.Matches(event)) {
+			/*if(!BuildSqlite()) SystemClass::Message(ICONINFORMATION, "Notice", "Failed to build SQLite'");
+			else SystemClass::Message(ICONINFORMATION, "Notice", "Built SQLite completed!!'");*/
+			if(Semaphore.Wait(10))
+				TimeLine_thread.Start();
+			else{
+				SystemClass::Message(SystemClass::ICONINFORMATION, "Warning", "Still Processing..");
+				return;
+			}
+		}
+	}
+
+	virtual void Setup() {
+		String StatusWindowTitle = "Progress Status";
+		int Time = 50;
+		StatusWindow.SetLimit(StatusWindowTitle, StatusWindowMax);
+		SetTimer(Time, StatusWindowTimerId);
+		//StatusWindow.SetLimit(StatusWindowTitle, 0);  // Set Progresss Bar as zero
+        //SetTimer(500); // SetTimer (uint milliseconds, uint Id=0), 1000ms = 1s
+    }
+	
+
+    virtual void TimerEvent(uint timerId) {
+         if (time_reset) {
+           hour=0;
+           minute=0;
+           second=0;
+           time_reset = false;
+         }
+         if (time_check) {
+           second++;
+           if(second >= 60) {
+             second=0;
+             minute++;
+           }
+           if(minute >= 60) {
+             minute=0;
+             hour++;
+           }
+           RunningTime.SetText( String::Format("{0}:{1}:{2} ",hour,minute,second));
+         } else {
+           RunningTime.SetText( String::Format("{0}:{1}:{2} ",hour,minute,second));
+         }
+    }
+
+	virtual bool CanClose(){
+		return false;
+	}
+}

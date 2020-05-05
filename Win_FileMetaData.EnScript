@@ -1,0 +1,476 @@
+class MainClass;
+
+class FileListClass : NameListClass {
+		property String 	fileName,
+									fileExtension,
+									fileCategory,
+									fileProperty,
+									fileSize,									
+									accessedTime,
+									createdTime,
+									writtenTime,
+									deletedTime,
+									filePath;
+									//md5HashValue;
+
+      FileListClass(FileListClass parent = null, const String& fileName="", const String& fileExtension="", const String& fileCategory="",
+	  const String& fileProperty="", const String& fileSize="", const String& accessedTime="", const String& createdTime="", const String& writtenTime="",
+	  const String& deletedTime="", const String& filePath=""): // const String& md5HashValue="") :
+	  NameListClass(parent),
+		fileName = fileName,
+		fileExtension =fileExtension,
+		fileCategory=fileCategory,
+		fileProperty=fileProperty,
+		fileSize = fileSize,
+		accessedTime = accessedTime,
+		createdTime = createdTime,
+		writtenTime = writtenTime,
+		deletedTime=deletedTime,
+		filePath = filePath
+		//md5HashValue = md5HashValue
+      {
+      }
+
+}
+
+class FileDialogClass;
+
+class FileHandlerClass :  HandlerClass {
+
+      FileDialogClass  File_dialog;
+
+      property FieldClass fileNameField,
+							fileExtensionField,
+							fileCategoryField,
+							filePropertyField,
+							fileSizeField,							
+							accessedTimeField,
+							createdTimeField,
+							writtenTimeField,
+							deletedTimeField,
+							filePathField;
+							//md5HashValueField;
+
+      MenuClass    CsvMenu;
+	  MenuClass	SqliteMenu;
+	  int options;
+      FileHandlerClass(FileDialogClass  File_dialog, const String &name, uint options, SymbolClass type):
+      HandlerClass(null,name,options, type),
+      File_dialog = File_dialog,
+	  options=options,
+	  fileNameField(this, "FileName", TEXTCENTER, "fileName", "A tag"),
+	  fileExtensionField(this, "FileExt", TEXTCENTER, "fileExtension", "B tag"),
+	  fileCategoryField(this, "Category", TEXTCENTER, "fileCategory", "C tag"),
+	  filePropertyField(this, "Property", TEXTCENTER, "fileProperty", "D tag"),
+      fileSizeField(this, "FileSize", TEXTRIGHT, "fileSize", "E tag"),
+	  accessedTimeField(this, "AccessedTime", TEXTCENTER, "accessedTime", "F tag"),
+	  createdTimeField(this, "CreatedTime", TEXTCENTER, "createdTime", "G tag"),
+	  writtenTimeField(this, "WrittenTime", TEXTCENTER, "writtenTime", "H tag"),
+	  filePathField(this, "FilePath", TEXTCENTER, "filePath", "I tag"),
+	  //md5HashValueField(this, "MD5HashValue", TEXTCENTER, "md5HashValue", "J tag"),
+	  
+      CsvMenu(MenuList, "CSV", MenuClass::TOOL),
+	  SqliteMenu(MenuList, "SQLite", MenuClass::TOOL)
+      {
+		fileNameField.SetColWidth(20);
+		fileExtensionField.SetColWidth(10);
+		fileCategoryField.SetColWidth(15);
+		filePropertyField.SetColWidth(15);
+		fileSizeField.SetColWidth(10);							
+		accessedTimeField.SetColWidth(20);
+		createdTimeField.SetColWidth(20);
+		writtenTimeField.SetColWidth(20);
+		filePathField.SetColWidth(45);
+		//md5HashValueField.SetColWidth(15);
+      }
+
+      virtual void BuildMenu(NodeEventClass event) {
+          event.MenuAdd(CsvMenu, 0);
+		  event.MenuAdd(SqliteMenu, 0);
+          HandlerClass::BuildMenu(event);
+      }
+
+      virtual MenuReply MenuEvent(MenuClass menu, NodeEventClass event) {
+          if (menu == CsvMenu) {
+              String savePath = "C:\\File_Common.csv";
+              ExportDialogClass dialog(null, savePath);
+
+              if (dialog.Execute() == SystemClass::OK) {
+                 LocalFileClass lf();
+                 if(lf.Open(savePath, FileClass::WRITETEXTCRLF)) {
+                    lf.SetCodePage(CodePageClass::UTF8);
+                     lf.Write("FileName, FileExt, FileSize, AccessedTime ,\n");
+
+                    foreach(FileListClass n in File_dialog.List) {
+                       lf.Write( n.fileName + "," + n.fileExtension + "," + n.fileSize + "," +  n.accessedTime + ",\n");
+                    }
+                    SystemClass::Message(SystemClass::ICONINFORMATION, "Notice", "Export Completed!!");
+                 }
+              }
+          }
+          else if (menu == SqliteMenu) {
+              String exportPath = "C:\\WindowsArtifacts.sqlite";
+              ExportDialogClass dialog(null, exportPath);
+
+              if (dialog.Execute() == SystemClass::OK) { //execute the export dialog
+				SQLiteClass sqliteDB();
+				LocalFileClass sqliteFile();
+				  if (!sqliteFile.Open(exportPath, FileClass::APPEND)){
+					SystemClass::Message(SystemClass::ICONINFORMATION, "Error", "Error in opening local  SQLite file");
+					Console.WriteLine("Error: Error in opening local SQLite file");
+					SystemClass::Exit();
+				  }
+                   if (sqliteDB.Open(sqliteFile, SQLiteClass::SQLITE_OPEN_READWRITE)){
+						sqliteFile.SetCodePage(CodePageClass::UTF8);
+					   SQLiteClass::CommandClass cmd = new SQLiteClass::CommandClass();
+					   if(sqliteDB.CreateCommand(cmd)){
+							 bool isSetTable = true;
+							 
+							 if(options==0){
+								  isSetTable = cmd.ExecuteNonQuery("CREATE TABLE File_Common (id INTEGER PRIMARY KEY, FileName LONGVARCHAR, FileExt LONGVARCHAR, FileCategory LONGVARCHAR, FileProperty LONGVARCHAR, FileSize LONGVARCHAR, AccessedTime LONGVARCHAR, CreatedTime LONGVARCHAR, WrittenTime LONGVARCHAR, FilePath LONGVARCHAR);"); //MD5HashValue LONGVARCHAR);");
+								 cmd.ExecuteNonQuery("BEGIN TRANSACTION;");
+								 if(isSetTable){ //if table is set up successfully, insert value in each field
+									bool isQuery = true;
+									foreach(FileListClass n in File_dialog.List) {
+										isQuery = cmd.ExecuteNonQuery("INSERT INTO File_Common (FileName, FileExt, FileCategory,FileProperty, FileSize, AccessedTime, CreatedTime, WrittenTime, FilePath) VALUES ('" + n.fileName + "', '" + n.fileExtension + "', '" + n.fileCategory + "', '" + n.fileProperty + "', '" + n.fileSize + "', '" + n.accessedTime + "', '" + n.createdTime + "', '" + n.writtenTime + "', '" + n.filePath + "');"); // + n.md5HashValue + "');");
+										if(!isQuery) Console.WriteLine("\nError: Failed to execute query. Query is not correct.\n");										
+									}
+								}
+								else SystemClass::Message(SystemClass::ICONINFORMATION, "Error", "SQLite Table was not set up correctly");
+								cmd.ExecuteNonQuery("END TRANSACTION;");
+							 }
+							 else if(options==1){
+								 isSetTable = cmd.ExecuteNonQuery("CREATE TABLE File_Hidden (id INTEGER PRIMARY KEY, FileName LONGVARCHAR, FileExt LONGVARCHAR, FileCategory LONGVARCHAR, FileProperty LONGVARCHAR, FileSize LONGVARCHAR, AccessedTime LONGVARCHAR, CreatedTime LONGVARCHAR, WrittenTime LONGVARCHAR, FilePath LONGVARCHAR);"); // MD5HashValue LONGVARCHAR);");
+								 cmd.ExecuteNonQuery("BEGIN TRANSACTION;");
+								 if(isSetTable){ //if table is set up successfully, insert value in each field
+									bool isQuery = true;
+									foreach(FileListClass n in File_dialog.List1) {
+										isQuery = cmd.ExecuteNonQuery("INSERT INTO File_Hidden (FileName, FileExt, FileCategory,FileProperty, FileSize, AccessedTime, CreatedTime, WrittenTime, FilePath) VALUES ('" + n.fileName + "', '" + n.fileExtension + "', '" + n.fileCategory + "', '" + n.fileProperty + "', '" + n.fileSize + "', '" + n.accessedTime + "', '" + n.createdTime + "', '" + n.writtenTime + "', '" + n.filePath + "');"); // + "', '" + n.md5HashValue + "');");
+										if(!isQuery) Console.WriteLine("\nError: Failed to execute query. Query is not correct.\n");										
+									}
+								}
+								else SystemClass::Message(SystemClass::ICONINFORMATION, "Error", "SQLite Table was not set up correctly");
+								cmd.ExecuteNonQuery("END TRANSACTION;");
+							 }
+							 else if(options==2){
+								  isSetTable = cmd.ExecuteNonQuery("CREATE TABLE File_Deleted (id INTEGER PRIMARY KEY, FileName LONGVARCHAR, FileExt LONGVARCHAR, FileCategory LONGVARCHAR, FileProperty LONGVARCHAR, FileSize LONGVARCHAR, AccessedTime LONGVARCHAR, CreatedTime LONGVARCHAR, WrittenTime LONGVARCHAR, FilePath LONGVARCHAR);"); // MD5HashValue LONGVARCHAR);");
+								 cmd.ExecuteNonQuery("BEGIN TRANSACTION;");
+								 if(isSetTable){ //if table is set up successfully, insert value in each field
+									bool isQuery = true;
+									foreach(FileListClass n in File_dialog.List2) {
+										isQuery = cmd.ExecuteNonQuery("INSERT INTO File_Deleted (FileName, FileExt, FileCategory,FileProperty, FileSize, AccessedTime, CreatedTime, WrittenTime, FilePath) VALUES ('" + n.fileName + "', '" + n.fileExtension + "', '" + n.fileCategory + "', '" + n.fileProperty + "', '" + n.fileSize + "', '" + n.accessedTime + "', '" + n.createdTime + "', '" + n.writtenTime + "', '" + n.filePath + "');"); // + "', '" + n.md5HashValue + "');");
+										if(!isQuery) Console.WriteLine("\nError: Failed to execute query. Query is not correct.\n");										
+									}
+								}
+								else SystemClass::Message(SystemClass::ICONINFORMATION, "Error", "SQLite Table was not set up correctly");
+								cmd.ExecuteNonQuery("END TRANSACTION;");
+							 }
+						}
+						else Console.WriteLine("Error: SQLite Command could not be created successfully");
+                 }
+				 else SystemClass::Message(SystemClass::ICONINFORMATION, "Error", "SQLite Database Connection could not be opened correctly");
+				sqliteFile.Close();
+				sqliteDB.Close();
+			  }
+				SystemClass::Message(SystemClass::ICONINFORMATION, "Notice", "Export Completed!!");
+          }
+          return HandlerClass::MenuEvent(menu, event);
+      }
+	  
+}
+
+class FileDialogClass;
+
+class FileThreadClass: ThreadClass {
+            FileDialogClass  File_dialog;
+            CaseClass c;
+            BookmarkClass folder;
+
+            FileThreadClass(FileDialogClass  File_dialog, const String &name, CaseClass c, BookmarkClass folder):
+            ThreadClass(null, name),
+            folder = folder,
+            c=c,
+            File_dialog =  File_dialog
+            {
+            }
+
+            virtual void Run() { //Core(Main) code to parse RecycleBin information
+                  while(IsRunning()) {
+						//Progress Bar related
+                       int StatusWindowMax, StatusWindowStatus, StatusPercent;
+
+                        for (ItemIteratorClass iter(c,0,ItemIteratorClass::CURRENTVIEW_SELECTED); DeviceClass dev = iter.GetNextDevice();) {
+                         EntryClass entryRoot = dev.GetRootEntry();
+                         StatusWindowMax = entryRoot.CountAll(2, NodeClass::COUNTNODES | NodeClass::COUNTFOLDERS  | NodeClass::COUNTRECURSIVE);
+                         Console.WriteLine(StatusWindowMax);
+                       } //set max value of the status window by current view selected
+
+                       File_dialog.StatusWindow.SetLimit("Progress Status", StatusWindowMax);
+
+                       if(StatusWindowMax < 100  )
+                          StatusPercent =  1;
+                       else
+                          StatusPercent =  StatusWindowMax / 100;
+
+                       File_dialog.time_reset = true;
+                       File_dialog.time_check = true;
+                       File_dialog.List.Close();
+                       File_dialog.TreeControl.Input();
+
+                       EntryFileClass ef();
+                       ef.SetCodePage(CodePageClass::UNICODE);
+
+                       for(ItemIteratorClass iter(c,0,ItemIteratorClass::CURRENTVIEW_SELECTED ); ItemClass item  = iter.GetNextItem();)  {
+                              if( (StatusWindowStatus++ % StatusPercent) == 0 ) { //Progress Bar, fill it up
+                                   File_dialog.StatusWindow.SetPosition(StatusWindowStatus);
+                              }
+							EntryClass entry = EntryClass::TypeCast(item); //type cast to ItemClass to use the methods which included in ItemClass
+							String path	= item.GetOriginalPath();
+							 String fileProperty="None"; 
+							 if(item.Extension()){
+								if(entry.IsDeleted() || path.Contains("$Recycle") && !entry.IsHidden()){
+									fileProperty="Deleted";
+									new  FileListClass(File_dialog.List2, item.Name(), item.Extension(), ItemClass::Categories::SourceText(entry.Category()), fileProperty, item.LogicalSize(), item.Accessed().GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600),
+									item.Created().GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600), item.Written().GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600), entry.Deleted().GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600),
+									item.ItemPath());// item.MD5Hash().GetString() );								
+								}
+								else if(entry.IsHidden()){
+									fileProperty="Hidden"; //switch statement on the file categories
+									new  FileListClass(File_dialog.List1, item.Name(), item.Extension(), ItemClass::Categories::SourceText(entry.Category()), fileProperty, item.LogicalSize(), item.Accessed().GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600),
+									item.Created().GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600), item.Written().GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600), entry.Deleted().GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600),
+									item.ItemPath());// item.MD5Hash().GetString() );										
+								}
+								else{
+									fileProperty="Common";	//switch statement on the file categories
+									new  FileListClass(File_dialog.List, item.Name(), item.Extension(), ItemClass::Categories::SourceText(entry.Category()), fileProperty, item.LogicalSize(), item.Accessed().GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600),
+									item.Created().GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600), item.Written().GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600), entry.Deleted().GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600),
+									item.ItemPath());// item.MD5Hash().GetString() );			
+									
+								}				
+							 }
+                       }
+                       SystemClass::Sleep(500);
+                       File_dialog.TreeControl.Input();
+					   File_dialog.TreeControl1.Input();
+					   File_dialog.TreeControl2.Input();
+                       foreach (FileListClass n in File_dialog.List) {
+                            FileListClass(File_dialog.ListCopy, n.fileName, n.fileExtension, n.fileCategory, n.fileProperty, n.fileSize, n.accessedTime, n.createdTime, n.writtenTime, n.deletedTime, n.filePath);// n.md5HashValue);
+                       }
+					  foreach (FileListClass n in File_dialog.List1) {
+                            FileListClass(File_dialog.ListCopy1, n.fileName, n.fileExtension, n.fileCategory, n.fileProperty, n.fileSize, n.accessedTime, n.createdTime, n.writtenTime, n.deletedTime, n.filePath);//n.md5HashValue);
+                       }
+					  foreach (FileListClass n in File_dialog.List2) {
+                            FileListClass(File_dialog.ListCopy2, n.fileName, n.fileExtension, n.fileCategory, n.fileProperty, n.fileSize, n.accessedTime, n.createdTime, n.writtenTime, n.deletedTime, n.filePath);//n.md5HashValue);
+                       }
+                       //LNK_dialog.search_name.Close();
+                       File_dialog.time_check = false;
+                       File_dialog.Semaphore.Release();
+
+                       BookmarkDataClass mark(folder, "File Information");
+                             // folder.SetComment("Comment for new BookmarkDataClass");
+                       mark.SetRoot(File_dialog.List, File_dialog.Handler);
+					   
+						BuildSqlite(); //Export sqlite file for timeline view in local "C:\\WindowsArtifact.sqlite"					   
+                          break;
+                  }
+
+             }//run()
+			 
+			 	void BuildSqlite(){
+				  String exportPath = "C:\\TimeLineArtifacts.sqlite";
+
+					SQLiteClass sqliteDB();
+					LocalFileClass sqliteFile();
+					  if (!sqliteFile.Open(exportPath, FileClass::APPEND)){
+						SystemClass::Message(SystemClass::ICONINFORMATION, "Error", "Error in opening local  SQLite file");
+						Console.WriteLine("Error: Error in opening local SQLite file");
+						SystemClass::Exit();
+					  }
+					   if (sqliteDB.Open(sqliteFile, SQLiteClass::SQLITE_OPEN_READWRITE)){
+							sqliteFile.SetCodePage(CodePageClass::UTF8);
+						   SQLiteClass::CommandClass cmd = new SQLiteClass::CommandClass();
+						   if(sqliteDB.CreateCommand(cmd)){
+								 bool isSetTable = true;
+								 isSetTable = cmd.ExecuteNonQuery("CREATE TABLE File_Deleted (id INTEGER PRIMARY KEY, FileName LONGVARCHAR, FileExt LONGVARCHAR, FileCategory LONGVARCHAR, FileProperty LONGVARCHAR, FileSize LONGVARCHAR, AccessedTime LONGVARCHAR, CreatedTime LONGVARCHAR, WrittenTime LONGVARCHAR, FilePath LONGVARCHAR);"); 
+								 if(isSetTable){ //if table is set up successfully, insert value in each field
+									bool isQuery = true;
+									foreach(FileListClass n in File_dialog.List2) {
+										isQuery = cmd.ExecuteNonQuery("INSERT INTO File_Deleted (FileName, FileExt, FileCategory,FileProperty, FileSize, AccessedTime, CreatedTime, WrittenTime, FilePath) VALUES ('" + n.fileName + "', '" + n.fileExtension + "', '" + n.fileCategory + "', '" + n.fileProperty + "', '" + n.fileSize + "', '" + n.accessedTime + "', '" + n.createdTime + "', '" + n.writtenTime + "', '" + n.filePath + "');");
+										if(!isQuery) Console.WriteLine("\nError: Failed to execute query. Query is not correct.\n");										
+									}
+								}
+								else SystemClass::Message(SystemClass::ICONINFORMATION, "Error", "SQLite Table was not set up correctly");
+								cmd.ExecuteNonQuery("END TRANSACTION;");
+							}
+							else Console.WriteLine("Error: SQLite Command could not be created successfully");
+					 }
+					 else SystemClass::Message(SystemClass::ICONINFORMATION, "Error", "SQLite Database Connection could not be opened correctly");
+					sqliteFile.Close();
+					sqliteDB.Close();
+				  Console.WriteLine("[+] File_Deleted table is built in "+exportPath);
+					//SystemClass::Message(SystemClass::ICONINFORMATION, "Notice", "Export Completed!!");
+			}
+
+ }
+
+class FileDialogClass : DialogClass {
+
+    FileThreadClass File_thread;
+    ThreadClass::SemaphoreClass  Semaphore;
+    FileListClass        List, List1, List2, ListCopy, ListCopy1, ListCopy2;
+    FileHandlerClass         Handler, Handler1, Handler2;
+    TreeTableEditClass      TreeControl, TreeControl1, TreeControl2;
+    StringEditClass         FilterControl;
+    String                  filter_name;
+    StaticTextClass         filter_title, search_time;
+    ButtonClass             button_search, button_stop;
+
+    bool time_check, time_reset;
+    int hour, minute, second;
+    CaseClass C;
+    StatusWindowClass StatusWindow;
+
+    //Dialog constructor
+    FileDialogClass(DialogClass parent,MainClass main, CaseClass c, BookmarkClass folder, int TreeViewSize):
+    DialogClass(parent, "File Information"),
+    C=c;
+
+    StatusWindow(this, "Searching", 5, 5, 200, 5, 0),
+    button_search(this, "Search ",  210, 15, 40, DEFAULT,0),
+	button_stop(this, "Stop ",  255, 15, 40, DEFAULT,0),
+    search_time(this, "", 300, 17, 40, DEFAULT,0),
+
+    FilterControl(this, "Keyword Search", 360, 5, 278,DEFAULT,0,filter_name,500, 0),
+
+    List(null, "List"),
+	List1(null, "List1"),
+	List2(null, "List2"),
+    ListCopy(null,""),
+	ListCopy1(null,""),
+	ListCopy2(null,""),
+    Handler(this, "Some Custom Class", 0, typeof(FileListClass)),
+	Handler1(this, "Some Custom Class", 1, typeof(FileListClass)),
+	Handler2(this, "Some Custom Class", 2, typeof(FileListClass)),
+
+    TreeControl(this, "Common Files ", 5, 30, 750, TreeViewSize/3-5, 0, List, ContextClass::CANCHECK | ContextClass::ALLFIELDS |
+                                                               ContextClass::CANDELETENODE, ListEditClass::TABLEDEFAULT,Handler  ),
+	TreeControl1(this, "Hidden FIles ", 5, TreeViewSize/3+38, 750, TreeViewSize/3-5, 0, List1, ContextClass::CANCHECK | ContextClass::ALLFIELDS |
+																ContextClass::CANDELETENODE, ListEditClass::TABLEDEFAULT,Handler1  ),
+	TreeControl2(this, "Deleted Files ", 5, TreeViewSize/3*2+45, 750, TreeViewSize/3-5, 0, List2, ContextClass::CANCHECK | ContextClass::ALLFIELDS |
+																ContextClass::CANDELETENODE, ListEditClass::TABLEDEFAULT,Handler2  ), //construct TreeTable as same handler, different list.
+     File_thread(this,"",c, folder)
+    {
+        TreeControl.SetView(ContextClass::PANETABLE);
+		TreeControl1.SetView(ContextClass::PANETABLE);
+		TreeControl2.SetView(ContextClass::PANETABLE);
+        Semaphore.Create(1, 1);
+    }
+
+    virtual void ChildEvent(const EventClass &event) {
+      if (button_search.Matches(event)) {
+           if (Semaphore.Wait(10)) {
+                  File_thread.Start();
+				  	//	  File_thread.StopRunning();
+           } else {
+                 SystemClass::Message(SystemClass::ICONINFORMATION, "Warning", "Still Processing..");
+                 return;
+           }
+      }
+	  else if(button_stop.Matches(event)){
+		  File_thread.StopRunning();
+	  }
+
+
+      if (FilterControl.Matches(event)) {
+           SearchClass search();
+           search.AddKeyword(FilterControl.GetText(), KeywordClass::UNICODE);
+
+           List.Close();
+		   List1.Close();
+		   List2.Close();
+           TreeControl.Input();
+		   TreeControl1.Input();
+		   TreeControl1.Input();
+
+           //int ListCopy_Count = ListCopy.CountAll(0,COUNTNODES);
+
+           if ( FilterControl.GetText() == "") {  //copy value when the lists are empty
+                foreach( FileListClass  n in  ListCopy ) { //search lists including keyword in the copied list
+                    FileListClass(List, n.fileName, n.fileExtension, n.fileSize, n.accessedTime, n.createdTime, n.writtenTime, n.filePath);
+                }
+           } else {
+                foreach( FileListClass  n in  ListCopy ) { //search lists including keyword in the copied list
+                    if ( (search.Find(n.fileName) == -1))
+                               continue;
+                   FileListClass(List, n.fileName, n.fileExtension, n.fileSize, n.accessedTime, n.createdTime, n.writtenTime, n.filePath);
+                }
+           }
+		   
+           if ( FilterControl.GetText() == "") {  //copy value when the lists are empty
+                foreach( FileListClass  n in  ListCopy1 ) { //search lists including keyword in the copied list
+                    FileListClass(List1, n.fileName, n.fileExtension, n.fileSize, n.accessedTime, n.createdTime, n.writtenTime, n.filePath);
+                }
+           } else {
+                foreach( FileListClass  n in  ListCopy1 ) { //search lists including keyword in the copied list
+                    if ( (search.Find(n.fileName) == -1))
+                               continue;
+                   FileListClass(List1, n.fileName, n.fileExtension, n.fileSize, n.accessedTime, n.createdTime, n.writtenTime, n.filePath);
+                }
+           }
+		   
+           if ( FilterControl.GetText() == "") {  //copy value when the lists are empty
+                foreach( FileListClass  n in  ListCopy2 ) { //search lists including keyword in the copied list
+                    FileListClass(List2, n.fileName, n.fileExtension, n.fileSize, n.accessedTime, n.createdTime, n.writtenTime, n.filePath);
+                }
+           } else {
+                foreach( FileListClass  n in  ListCopy2 ) { //search lists including keyword in the copied list
+                    if ( (search.Find(n.fileName) == -1))
+                               continue;
+                   FileListClass(List2, n.fileName, n.fileExtension, n.fileSize, n.accessedTime, n.createdTime, n.writtenTime, n.filePath);
+                }
+           }		   
+
+           TreeControl.Input();
+		   TreeControl1.Input();
+		   TreeControl2.Input();
+      }
+
+       DialogClass::ChildEvent(event);
+
+    }//virtual void ChildEvent
+
+    virtual void Setup() {
+          StatusWindow.SetLimit("Progress Status", 0); //프로그레스바 0 으로 셋팅
+          SetTimer(1000); // 1초마다 호출
+    }
+
+    virtual void TimerEvent(uint timerId) {
+         if (time_reset) {
+           hour=0;
+           minute=0;
+           second=0;
+           time_reset = false;
+         }
+         if (time_check) {
+           second++;
+           if(second >= 60) {
+             second=0;
+             minute++;
+           }
+           if(minute >= 60) {
+             minute=0;
+             hour++;
+           }
+           search_time.SetText( String::Format("{0}:{1}:{2} ",hour,minute,second));
+         } else {
+           search_time.SetText( String::Format("{0}:{1}:{2} ",hour,minute,second));
+         }
+    }
+
+    virtual bool CanClose() {
+
+          return false;
+    }
+}
+
+

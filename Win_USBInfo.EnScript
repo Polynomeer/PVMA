@@ -1,0 +1,886 @@
+
+class MainClass;
+
+class USBRegListClass : NameListClass {
+	property String
+	vendor,
+	prod,
+	FriendlyName,
+	FirstConnectedTime,
+	BootFirstConnectedTime,
+	LastConnectedTime,
+	rev,
+	UID,
+	GUIDD,
+	GUIDV;
+
+	USBRegListClass(USBRegListClass parent = null, const String & vendor = "", const String & prod = "", const String & FriendlyName = "", const String & FirstConnectedTime = "", const String & BootFirstConnectedTime = "", const String & LastConnectedTime = "", const String & rev = "", const String & UID = "", const String & GUIDD = "", const String & GUIDV = "") :
+	NameListClass(parent),
+	vendor = vendor,
+	prod = prod,
+	rev = rev,
+	UID = UID,
+	FriendlyName = FriendlyName,
+	FirstConnectedTime = FirstConnectedTime,
+	BootFirstConnectedTime = BootFirstConnectedTime,
+	GUIDD = GUIDD,
+	GUIDV = GUIDV,
+	LastConnectedTime = LastConnectedTime {}
+}
+
+class USBEventLogListClass : NameListClass {
+	property String vendor,
+							 product,
+							 state,							
+							 generatedTime,
+							 writtenTime,
+							 revision,
+							 serialNum,							
+							 lifetimeGUID,
+							 sourceGUID,
+							 source,
+							 computer,
+							 SID;							
+							
+	USBEventLogListClass(USBEventLogListClass parent = null, const String& vendor="", const String& product="", const String& state="", const String& generatedTime="",
+	const String& writtenTime="", const String& revision="", const String& serialNum="", const String& lifetimeGUID="", const String& sourceGUID="",
+	const String& source="", const String& computer="",const String& SID=""):
+		 NameListClass(parent),							 						
+		 vendor=vendor,
+		 product=product,
+		 state=state,							
+		 generatedTime=generatedTime,
+		 writtenTime=writtenTime,
+		 revision=revision,
+		 serialNum=serialNum,							
+		 lifetimeGUID= lifetimeGUID,
+		 sourceGUID=sourceGUID,
+		 source=source,
+		 computer = computer,
+		 SID =SID
+		 {
+		 }
+}
+
+class USBDialogClass;
+
+class USBWindowsHandlerClass : HandlerClass {
+	USBDialogClass USBWindows_dialog;
+	property FieldClass
+	vendorField,
+	prodField,
+	FriendlyNameField,
+	FirstConnectedTimeField,
+	BootFirstConnectedTimeField,
+	LastConnectedTimeField,
+	revField,
+	UIDField,
+	GUIDDField,
+	GUIDVField;
+
+	MenuClass CSVMenu;
+
+	USBWindowsHandlerClass(USBDialogClass USBWindows_dialog, const String & name, uint options, SymbolClass type) :
+	HandlerClass(null, name, options, type),
+	USBWindows_dialog = USBWindows_dialog,
+	vendorField(this, "Vendor", 0, "vendor", "vendor tag"),
+	prodField(this, "Product", 0, "prod", "prod tag"),
+	FriendlyNameField(this, "FriendlyName", 0, "FriendlyName", "A tag"),
+	FirstConnectedTimeField(this, "FirstConnect Time", TEXTCENTER, "FirstConnectedTime", "B tag"),
+	BootFirstConnectedTimeField(this, "FirstConnectTime AfterBooting", TEXTCENTER, "BootFirstConnectedTime", "C tag"),
+	LastConnectedTimeField(this, "LastConnect Time", TEXTCENTER, "LastConnectedTime", "D tag"),
+	revField(this, "Firmware Revision", 0, "rev", "E tag"),
+	UIDField(this, "Serial Number", 0, "UID", "F tag"),
+	GUIDDField(this, "Device GUID", 0, "GUIDD", "H tag"),
+	GUIDVField(this, "Volume GUID", 0, "GUIDV", "I tag"),
+	CSVMenu(MenuList, "CSV", MenuClass::TOOL) {
+		vendorField.SetColWidth(10);
+		prodField.SetColWidth(15);
+		FriendlyNameField.SetColWidth(10);
+		FirstConnectedTimeField.SetColWidth(20);
+		BootFirstConnectedTimeField.SetColWidth(20);
+		LastConnectedTimeField.SetColWidth(20);
+		revField.SetColWidth(5);
+		UIDField.SetColWidth(20);
+		GUIDDField.SetColWidth(20);
+		GUIDVField.SetColWidth(20);
+	}
+
+	virtual void BuildMenu(NodeEventClass event) {
+		event.MenuAdd(CSVMenu, 0);
+		HandlerClass::BuildMenu(event);
+	}
+	
+	virtual MenuReply MenuEvent(MenuClass menu, NodeEventClass event) {
+		if (menu == CSVMenu) {
+			String savePath = "C:\\Browser_Exit.csv";
+
+			ExportUSBWindowsDialogClass dialog(null, savePath);
+
+			if (dialog.Execute() == SystemClass::OK) {
+				LocalFileClass lf();
+				if (lf.Open(savePath, FileClass::WRITETEXTCRLF)) {
+					lf.SetCodePage(CodePageClass::UTF8);
+
+					lf.Write("vendor, prod, rev, UID, FriendlyName, FirstConnectedTime, BootFirstConnectedTime, GUIDD, " +
+						"GUIDV, LastConnectedTime,\n");
+
+					foreach(USBRegListClass n in USBWindows_dialog.List) {
+						lf.Write("\"" + n.vendor + "\"" + "," + "\"" + n.prod + "\"" + "," + n.rev + "," + "\"" + n.UID + "\"" + "," + "\"" + n.FriendlyName + "\"" + "," +
+							n.FirstConnectedTime + "," + n.BootFirstConnectedTime + "," + n.GUIDD + "," + n.GUIDV + "," + n.LastConnectedTime + ",\n");
+
+					}
+					SystemClass::Message(SystemClass::ICONINFORMATION, "Notice", "Export Completed!!");
+				}
+			}
+		}
+
+		return HandlerClass::MenuEvent(menu, event);
+	}
+
+}
+
+class USBEventLogHandlerClass : HandlerClass {
+	USBDialogClass USBEventLog_dialog;
+	property FieldClass vendorField,
+									productField,
+									stateField,
+									generatedTimeField,
+									writtenTimeField,									
+									revisionField,
+									serialNumField,
+									lifetimeGUIDField,
+									sourceGUIDField,
+									sourceField,
+									computerField,
+									SIDField;
+
+	MenuClass CsvMenu;
+	MenuClass SqliteMenu;
+
+	USBEventLogHandlerClass(USBDialogClass USBEventLog_dialog, const String & name, uint options, SymbolClass type) :
+	HandlerClass(null, name, options, type),
+	USBEventLog_dialog = USBEventLog_dialog,
+	vendorField(this, "Vendor", 0, "vendor", "vendor tag"),
+	productField(this, "Product", 0, "product", "product tag"),
+    stateField(this, "State", TEXTCENTER,"state", "state tag" ),
+	generatedTimeField(this, "GeneratedTime", TEXTCENTER, "generatedTime", "A tag"),
+	writtenTimeField(this, "WrittenTime", TEXTCENTER, "writtenTime", "B tag"),
+	revisionField(this, "Firmware Revision", 0, "revision", "C tag"),	
+	serialNumField(this, "Serial Number", 0, "serialNum", "D tag"),
+	lifetimeGUIDField(this, "Life Time GUID", 0, "lifetimeGUID", "F tag"),
+	sourceGUIDField(this, "SourceGUID", 0, "sourceGUID", "G tag"),
+	sourceField(this, "Source", 0, "source", "H tag"),
+	computerField(this, "Computer", 0, "computer", "I tag"),
+	SIDField(this, "SID", 0, "SID", "J tag"),
+	CsvMenu(MenuList, "CSV", MenuClass::TOOL),
+	SqliteMenu(MenuList, "SQLite", MenuClass::TOOL)	
+	{
+		vendorField.SetColWidth(10);
+		productField.SetColWidth(15);
+		stateField.SetColWidth(10);
+		generatedTimeField.SetColWidth(20);
+		writtenTimeField.SetColWidth(20);
+		revisionField.SetColWidth(5);
+		serialNumField.SetColWidth(15);
+		lifetimeGUIDField.SetColWidth(20);
+		sourceGUIDField.SetColWidth(20);
+        sourceField.SetColWidth(20);
+		computerField.SetColWidth(10);
+		SIDField.SetColWidth(10);
+	}
+
+	virtual void BuildMenu(NodeEventClass event) {
+		event.MenuAdd(CsvMenu, 0);
+		event.MenuAdd(SqliteMenu, 0);
+		HandlerClass::BuildMenu(event);
+	}
+
+	virtual MenuReply MenuEvent(MenuClass menu, NodeEventClass event) {
+		if (menu == CsvMenu) {
+			String savePath = "C:\\Browser_Exit.csv";
+			ExportDialogClass dialog(null, savePath);
+			if (dialog.Execute() == SystemClass::OK) {
+				LocalFileClass lf();
+				if (lf.Open(savePath, FileClass::WRITETEXTCRLF)) {
+					lf.SetCodePage(CodePageClass::UTF8);
+					lf.Write("vendor, prod, rev, UID, FriendlyName, FirstConnectedTime, BootFirstConnectedTime, GUIDD, " +
+						"GUIDV, LastConnectedTime,\n");
+					foreach(USBEventLogListClass n in USBEventLog_dialog.List1) {
+						lf.Write("\"" + n.vendor + "\"" + "," + "\"" + n.product + "\"" + "," + n.state + "," + "\"" + n.generatedTime + "\"" + "," + "\"" + n.writtenTime + "\"" + "," +
+							n.revision + "," + n.serialNum + "," + n.lifetimeGUID + "," + n.sourceGUID + "," + "\"" + n.source + "," + "\"" + n.computer + "," + "\"" + n.SID + ",\n");
+					}
+					SystemClass::Message(SystemClass::ICONINFORMATION, "Notice", "Export Completed!!");
+				}
+			}
+		}
+		else if (menu == SqliteMenu) {
+		  String exportPath = "C:\\WindowsArtifacts.sqlite";
+		  ExportDialogClass dialog(null, exportPath);
+
+		  if (dialog.Execute() == SystemClass::OK) { //execute the export dialog
+			SQLiteClass sqliteDB();
+			LocalFileClass sqliteFile();
+			  if (!sqliteFile.Open(exportPath, FileClass::APPEND)){
+				SystemClass::Message(SystemClass::ICONINFORMATION, "Error", "Error in opening local  SQLite file");
+				Console.WriteLine("Error: Error in opening local SQLite file");
+				SystemClass::Exit();
+			  }
+			   if (sqliteDB.Open(sqliteFile, SQLiteClass::SQLITE_OPEN_READWRITE)){
+					sqliteFile.SetCodePage(CodePageClass::UTF8);
+				   SQLiteClass::CommandClass cmd = new SQLiteClass::CommandClass();
+				   if(sqliteDB.CreateCommand(cmd)){
+						 bool isSetTable = true;
+						 isSetTable = cmd.ExecuteNonQuery("CREATE TABLE USB_EventLog (id INTEGER PRIMARY KEY, Vendor LONGVARCHAR, Product LONGVARCHAR, State LONGVARCHAR, GeneratedTime LONGVARCHAR, WrittenTime LONGVARCHAR, FirmwareRevision LONGVARCHAR, SerialNumber LONGVARCHAR, LifeTimeGUID LONGVARCHAR, SourceGUID LONGVARCHAR, Source LONGVARCHAR, Computer LONGVARCHAR, SID LONGVARCHAR);");
+						 if(isSetTable){ //if table is set up successfully, insert value in each field
+							bool isQuery = true;
+							foreach(USBEventLogListClass n in USBEventLog_dialog.List1) {
+								isQuery = cmd.ExecuteNonQuery("INSERT INTO USB_EventLog (Vendor, Product, State, GeneratedTime, WrittenTime, FirmwareRevision, SerialNumber, LifeTimeGUID, SourceGUID, Source, Computer, SID) VALUES ('" + n.vendor + "', '" + n.product + "', '" + n.state + "', '" + n.generatedTime + "', '" + n.writtenTime + "', '" + n.revision + "', '" + n.serialNum + "', '" + n.lifetimeGUID + "', '" + n.sourceGUID + "', '" + n.source + "', '" + n.computer + "', '" + n.SID + "');");
+								if(!isQuery) Console.WriteLine("\nError: Failed to execute query. Query is not correct.\n");										
+							}
+						}
+						//else SystemClass::Message(SystemClass::ICONINFORMATION, "Error", "SQLite Table was not set up correctly.");
+					}
+					else Console.WriteLine("Error: SQLite Command could not be created successfully");
+			 }
+			 else SystemClass::Message(SystemClass::ICONINFORMATION, "Error", "SQLite Database Connection could not be opened correctly");
+			sqliteFile.Close();
+			sqliteDB.Close();
+		  }
+			SystemClass::Message(SystemClass::ICONINFORMATION, "Notice", "Export Completed!!");
+	  }
+		return HandlerClass::MenuEvent(menu, event);
+	}
+
+}
+
+class ExportUSBWindowsDialogClass : DialogClass {
+	PathEditClass SaveHere;
+
+	ExportUSBWindowsDialogClass(DialogClass parent, String & savePath) :
+	DialogClass(parent, "ExportClass Example"),
+	SaveHere(this, "Location To save the CSV File", START, START, 200, DEFAULT, 0, savePath, PathEditClass::REQUIRED | PathEditClass::FILECREATE) {}
+}
+
+class USBWindowsThreadClass : ThreadClass {
+	USBDialogClass USBWindows_dialog;
+	CaseClass c;
+	BookmarkClass folder;
+
+	RegCommandClass cmds;
+
+	USBWindowsThreadClass(USBDialogClass USBWindows_dialog, const String & name, CaseClass c, BookmarkClass folder) :
+	ThreadClass(null, name),
+	c = c,
+	folder = folder,
+	cmds(),
+	USBWindows_dialog = USBWindows_dialog {}
+
+	virtual void Run() {
+		while (IsRunning()) {
+
+			int StatusWindowMax;
+			int StatusWindowStatus;
+			int StatusPercent;
+
+			USBWindows_dialog.time_reset = true;
+			USBWindows_dialog.time_check = true;
+			USBWindows_dialog.List.Close();
+			USBWindows_dialog.TreeControl.Input();
+
+			for (ItemIteratorClass iter(c, 0, ItemIteratorClass::CURRENTVIEW); EntryClass entry = iter.GetNextEntry(); ) {
+			   if (entry.IsVolume()) {
+				   VolumeClass vol = entry.GetVolume();
+				   if (vol) {
+						if(vol.WinDir().Find("Windows") != -1) {				
+							RegistryClass reg(entry);
+							Console.WriteLine("Registry File is on {0}:\\ drive", entry.Name());
+							
+							new RegCommandClass(cmds, "HKLM_ENUM_USBSTOR", RegCommandClass::READKEY, RegCommandClass::HKEY_LOCAL_MACHINE,
+								"SYSTEM\\ControlSet001\\Enum\\USBSTOR", "", 0, 2);
+
+							new RegCommandClass(cmds, "HKLM_ENUM_USB", RegCommandClass::READKEY, RegCommandClass::HKEY_LOCAL_MACHINE,
+								"SYSTEM\\ControlSet001\\Enum\\USB", "", 0, 1);
+
+							new RegCommandClass(cmds, "HKLM_CONTROL_DEVICECLASSES_D", RegCommandClass::READKEY, RegCommandClass::HKEY_LOCAL_MACHINE,
+								"SYSTEM\\ControlSet001\\Control\\DeviceClasses\\{53f56307-b6bf-11d0-94f2-00a0c91efb8b}", "", 0, 1);
+
+							new RegCommandClass(cmds, "HKLM_CONTROL_DEVICECLASSES_V", RegCommandClass::READKEY, RegCommandClass::HKEY_LOCAL_MACHINE,
+								"SYSTEM\\ControlSet001\\Control\\DeviceClasses\\{53f5630d-b6bf-11d0-94f2-00a0c91efb8b}", "", 0, 1);
+
+							new RegCommandClass(cmds, "HKLM_PORTABLE_DEVICES", RegCommandClass::READKEY, RegCommandClass::HKEY_LOCAL_MACHINE,
+								"SOFTWARE\\Microsoft\\Windows Portable Devices\\Devices", "", 0, 1);
+
+							new RegCommandClass(cmds, "HKLM_ProfileLists", RegCommandClass::READKEY, RegCommandClass::HKEY_LOCAL_MACHINE,
+								"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList", "", 0, 1);
+
+							new RegCommandClass(cmds, "HKLM_MOUNTEDDEVICE", RegCommandClass::READKEY, RegCommandClass::HKEY_LOCAL_MACHINE,
+								"SYSTEM\\MountedDevices", "", 0, 1);
+
+							RegValueClass values();
+							if(cmds == null) {
+								Console.WriteLine("Error: Registry has no data.");
+								break;
+							}
+							if (reg.Run(cmds, values)) {
+								String DID,
+								UID,
+								FriendlyName,
+								FirstConnectedTime,
+								BootFirstConnectedTime,
+								GUIDD,
+								GUIDV,
+								LastConnectedTime,
+								Drive_Letter,
+								Volume_Guid;
+								RegValueClass HKLM_ENUM_USBSTOR = values.Find("HKLM_ENUM_USBSTOR");
+								if (HKLM_ENUM_USBSTOR) {
+									forall(RegValueClass n in HKLM_ENUM_USBSTOR) {
+										StatusWindowMax++;
+									} //set max value of the status window by RegValueClass
+
+									USBWindows_dialog.StatusWindow.SetLimit("Progress Status", StatusWindowMax);
+
+									if (StatusWindowMax < 100)
+										StatusPercent = 1;
+									else
+										StatusPercent = StatusWindowMax / 100;
+
+									USBWindows_dialog.StatusWindow.SetPosition(StatusWindowMax);
+									
+									forall(RegValueClass n in HKLM_ENUM_USBSTOR) {
+										if ((StatusWindowStatus++ % StatusPercent) == 0) {
+											USBWindows_dialog.StatusWindow.SetPosition(StatusWindowStatus);
+										}
+
+										if (n.Name().Find("Disk") != -1 && n.Name().Find("Disk") != -1 && n.Name().Find("Ven") != -1 && n.Name().Find("Prod") != -1 && n.Name().Find("Rev") != -1 && n.IsFolder()) {
+											DID = UID = FriendlyName = FirstConnectedTime = BootFirstConnectedTime = GUIDD = GUIDV = LastConnectedTime = Drive_Letter = Volume_Guid = "";
+											DID = n.Name();
+										}
+										if (n.Name().Find("&", n.Name().GetLength() - 2, n.Name().GetLength()) != -1 && n.IsFolder()) {
+											UID = n.Name();
+											String DID_UID = DID + "#" + UID;
+											DID_UID.ToUpper();
+											if (reg.Run(cmds, values)) {
+												RegValueClass HKLM_PORTABLE_DEVICES = values.Find("HKLM_PORTABLE_DEVICES");
+												if (HKLM_PORTABLE_DEVICES) {
+													int count;
+													forall(RegValueClass n1 in HKLM_PORTABLE_DEVICES) {
+														if (n1.Name().Find(DID_UID) != -1) {
+															count = 1;
+														}
+														if (n1.Name() == "FriendlyName" && count == 1) {
+															FriendlyName = n1.ValueText();
+															FirstConnectedTime = n1.LastWritten().GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600);
+															break;
+														}
+													}
+												}
+
+												RegValueClass HKLM_CONTROL_DEVICECLASSES_D = values.Find("HKLM_CONTROL_DEVICECLASSES_D");
+												if (HKLM_CONTROL_DEVICECLASSES_D) {
+													forall(RegValueClass n1 in HKLM_CONTROL_DEVICECLASSES_D) {
+														if (n1.Name().Find(DID_UID) != -1) {
+															BootFirstConnectedTime = n1.LastWritten().GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600);
+														}
+													}
+												}
+
+												RegValueClass HKLM_CONTROL_DEVICECLASSES_V = values.Find("HKLM_CONTROL_DEVICECLASSES_V");
+												if (HKLM_CONTROL_DEVICECLASSES_V) {
+													forall(RegValueClass n1 in HKLM_CONTROL_DEVICECLASSES_V) {
+														if (n1.Name().Find(DID_UID) != -1) {
+															BootFirstConnectedTime = n1.LastWritten().GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600);
+														}
+													}
+												}
+
+												RegValueClass HKLM_MOUNTEDDEVICE = values.Find("HKLM_MOUNTEDDEVICE");
+												if (HKLM_MOUNTEDDEVICE) {
+													forall(RegValueClass n1 in HKLM_MOUNTEDDEVICE) {
+														String trimed = n1.ValueText();
+														trimed.Trim(" ", String::TRIMALL);
+														String decoded = Parse("0x" + trimed);
+														if (decoded.Find(DID) != -1 && n1.Name().Find("DosDevices") != -1) {
+															GUIDD = n1.Name();
+														}
+
+														if (decoded.Find(DID) != -1 && n1.Name().Find("Volume") != -1) {
+															GUIDV = n1.Name();
+														}
+													}
+												}
+
+												RegValueClass HKLM_ProfileLists = values.Find("HKLM_ProfileLists");
+												if (HKLM_ProfileLists) {
+													forall(RegValueClass n1 in HKLM_ProfileLists) {
+														if (n1.IsFolder()) {
+															new RegCommandClass(cmds, "HKLM_MOUNTPOINT2_" + n1.Name(), RegCommandClass::READKEY, RegCommandClass::HKEY_USERS, n1.Name() + "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\MountPoints2", "", 0, 1);
+															RegValueClass HKLM_MOUNTPOINT2 = values.Find("HKLM_MOUNTPOINT2_" + n1.Name());
+															if (HKLM_MOUNTPOINT2) {
+																forall(RegValueClass n2 in HKLM_MOUNTPOINT2) {
+																	if (GUIDD.Find(n2.Name()) != -1)
+																		LastConnectedTime = n2.LastWritten().GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600);
+																	if (GUIDV.Find(n2.Name()) != -1)
+																		LastConnectedTime = n2.LastWritten().GetString("yyyy/MM/dd", "HH:mm:ss", 9 * -3600);
+																}
+															}
+														}
+													}
+												}
+
+											}
+											String vendor, prod,	rev;
+											vendor = DID.SubString(DID.Find("&Ven_"), -1);
+											vendor = vendor.SubString(5, vendor.Find("&", 1) - 5);
+
+											prod = DID.SubString(DID.Find("&Prod_"), -1);
+											prod = prod.SubString(6, prod.Find("&", 1) - 6);
+
+											rev = DID.SubString(DID.Find("&Rev_"), -1);
+											rev = rev.SubString(5, rev.Find("&", 1) - 5);
+
+											new USBRegListClass(USBWindows_dialog.List, vendor, prod, FriendlyName, FirstConnectedTime, BootFirstConnectedTime, LastConnectedTime, rev, UID, GUIDD, GUIDV );
+											//insert parsed data into NameListClass object
+										}
+
+									}
+								}
+								break;
+							} else {
+								Console.WriteLine("Failed to Run with RegistryClass. ");
+								break;
+							}
+						} 
+					}
+			   } //Console.WriteLine("This entry is not a drive. Entry name : {0}", entry.Name());
+			} // for loop close
+			
+			SystemClass::Sleep(500);
+			USBWindows_dialog.TreeControl.Input();
+			//USBWindows_dialog.time_check = false;
+			USBWindows_dialog.Semaphore.Release();
+			foreach(USBRegListClass n in USBWindows_dialog.List) {
+				USBRegListClass(USBWindows_dialog.List_Copy_Value, n.vendor, n.prod, n.FriendlyName, n.FirstConnectedTime, n.BootFirstConnectedTime, n.LastConnectedTime, n.rev, n.UID, n.GUIDD, n.GUIDV);
+			}
+			USBWindows_dialog.StatusWindow.SetPosition(StatusWindowMax);
+
+			BookmarkDataClass mark(folder, "USB_Registry"); ///////////////////////////
+			// folder.SetComment("Comment for new BookmarkDataClass");
+			mark.SetRoot(USBWindows_dialog.List, USBWindows_dialog.Handler); ///////////////////////////
+			//SystemClass::Message(SystemClass::ICONINFORMATION, "Notice", "USB_Registry Export Finish");
+			break;
+			
+		} // while loop close
+
+	} //run()
+
+
+	String Parse(const String & s) {
+		String ret;
+		int len = s.GetLength();
+		char prev = '_';
+		char c;
+		for (int i = 0; i < len; ++i) {
+			prev = c;
+			c = s[i];
+			if (c == '%') {
+				// get next 2
+				i++;
+				String j = s[i];
+				i++;
+				j += s[i];
+				ret += DecodeHex(j);
+			} else if (c == '0' && ((i + 1 < len) && (s[i + 1] == 'x' || s[i + 1] == 'X'))) {
+				++i;
+				//decode hex
+				while (++i < len) {
+					char w = s[i];
+					if (w == '%' || (!char::IsDigit(w) && w != 'a' && w != 'A' && w != 'b' && w != 'B' && w != 'c' && w != 'C' && w != 'd' && w != 'D' && w != 'e' && w != 'E' && w != 'f' && w != 'F')) {
+						--i;
+						break;
+					}
+					if (i == 340) {
+						//Console.WriteLine();
+					}
+					char w1;
+					if ((i + 1) < len) {
+						w1 = s[i + 1];
+					}
+					String b = w + "" + w1;
+					++i;
+					ret += DecodeHex(b);
+				}
+			} else
+				ret += c;
+		}
+		return ret;
+	}
+
+	String DecodeHex(const String & str) {
+		String ret;
+		int len = str.GetLength();
+		for (int i = 0; (i < len) && ((i + 1) < len); i = i + 2) {
+			String s = str[i];
+			s += str[i + 1];
+			char c = int::Convert(s, int::HEX);
+			ret += c;
+		}
+		return ret;
+	}
+
+}
+
+
+class USBEventLogThreadClass : ThreadClass {
+	USBDialogClass USBEventLog_dialog;
+	CaseClass c;
+	BookmarkClass folder;
+
+	RegCommandClass cmds;
+
+	USBEventLogThreadClass(USBDialogClass USBEventLog_dialog, const String & name, CaseClass c, BookmarkClass folder) :
+	ThreadClass(null, name),
+	c = c,
+	folder = folder,
+	cmds(),
+	USBEventLog_dialog = USBEventLog_dialog {}
+	
+	virtual void Run() {
+		while (IsRunning()) {
+
+			int StatusWindowMax;
+			int StatusWindowStatus;
+			int StatusPercent;
+			
+			USBEventLog_dialog.time_reset = true;
+			USBEventLog_dialog.time_check = true;
+			USBEventLog_dialog.List1.Close();
+			USBEventLog_dialog.TreeControl1.Input();
+
+		  ParserClass::EventLogParserClass EventParser = new ParserClass::EventLogParserClass();
+		  ParserClass::EvtxArtifactClass EvtxArtifactList = new ParserClass::EvtxArtifactClass();
+
+			bool isRun = false;
+		   EntryFileClass ef();
+		   ef.SetCodePage(CodePageClass::UNICODE);
+		
+		   for(ItemIteratorClass iter(c, 0, ItemIteratorClass::CURRENTVIEW); EntryClass entry = iter.GetNextEntry();) {
+			 //must open an EntryFile with each entry to check if the file matches what is being parsed for					 
+			   if(entry.ItemPath().Find("Windows\\System32\\winevt\\Logs") != -1 ) {
+					if( (entry.Name() == "Microsoft-Windows-DriverFrameworks-UserMode%4Operational.evtx") ) {
+						if(ef.Open(entry) ) {
+							//ef.SetCodePage(CodePageClass::ANSI);
+							 EventParser.Run(ef);
+							 isRun = true;
+							 Console.WriteLine("Event Parser starts running..");
+						} else
+							Console.WriteLine("Error: Failed to open the event log.");
+					} //else Console.WriteLine("Error: Microsoft-Windows-DriverFrameworks-UserMode%4Operational.evtx does not exits.");
+			   } //else Console.WriteLine("Error: \\Windows\\System32\\winevt\\Logs path does not exist.");		   
+		   }
+		   
+		   if(!isRun) {
+			   Console.WriteLine("Error: Failed to run Event Parser.");
+			   	USBEventLog_dialog.time_check = false;
+				USBEventLog_dialog.Semaphore.Release();
+			   return;
+		   }
+				
+				int StatusWindowMax_tmp;
+				String event_channel, event_computer, event_id, event_keyword, event_level, event_opcode, event_processID, event_qualifiers, event_recordNumber,
+				  event_sid, event_sourceEventName, event_sourceGuid, event_sourceName, event_task, event_theadID, event_timeGenerated, event_timeWritten, event_version, event_xmlEventData,
+				  event_time, event_xml, event_category;
+
+				  EvtxArtifactList = EventParser.EvtxArtifacts();
+				  ParserClass::EvtxArtifactClass preEvtx;
+				  
+				  foreach(ParserClass::EvtxArtifactClass evtx in EvtxArtifactList){
+					StatusWindowMax_tmp++;
+				  }
+				  StatusWindowMax = StatusWindowMax_tmp;
+				  USBEventLog_dialog.StatusWindow.SetLimit("Progress Status", StatusWindowMax);
+				  //Console.WriteLine("Status Window Max Value : "+StatusWindowMax);
+				   if(StatusWindowMax < 100  )
+					  StatusPercent =  1;
+				   else
+					  StatusPercent =  StatusWindowMax / 100;				  
+				  
+				  foreach(ParserClass::EvtxArtifactClass evtx in EvtxArtifactList){ //get the first event
+					preEvtx=evtx;
+					break;
+				  }
+				  int count=0;
+				  String vendor, product, revision, serialNum, lifeTime, state;
+			
+				  foreach(ParserClass::EvtxArtifactClass evtx in EvtxArtifactList){
+					  /*if( (StatusWindowStatus++ % StatusPercent) == 0 ) {
+						   USBEventLog_dialog.StatusWindow.SetPosition(StatusWindowStatus);
+					  }	*/
+					  USBEventLog_dialog.StatusWindow.SetPosition(StatusWindowStatus++);
+					//Console.WriteLine(StatusWindowStatus+" / "+StatusWindowMax);			  
+						if(preEvtx.TimeGenerated()==evtx.TimeGenerated() || preEvtx.TimeWritten()==evtx.TimeWritten()){	//compare preccesor event and currunt event
+							count++; //same device, so count up
+						} else{						
+							//Console.WriteLine("Event Changed!!");
+							if(count==25 && preEvtx.TimeGenerated()!=evtx.TimeGenerated()){
+								state="Mounted";
+								Console.WriteLine(preEvtx.TimeGenerated().GetString()+" : "+product+" was mounted.");
+								new USBEventLogListClass(USBEventLog_dialog.List1, vendor, product, state, event_timeGenerated, event_timeWritten, revision, serialNum, lifeTime, event_sourceGuid, event_sourceName, event_computer, event_sid);
+								
+							} else if(count==8 && preEvtx.TimeGenerated()!=evtx.TimeGenerated()){
+								state="Unmounted";
+								Console.WriteLine(preEvtx.TimeGenerated().GetString()+" : "+product+" was unmounted.");
+								new USBEventLogListClass(USBEventLog_dialog.List1, vendor, product, state, event_timeGenerated, event_timeWritten, revision, serialNum, lifeTime, event_sourceGuid, event_sourceName, event_computer, event_sid);
+							}
+							count=1; //reset count
+						}
+						  //event_channel = evtx.Channel();
+						  event_computer = evtx.Computer();
+						  event_id = evtx.EventId();
+						  event_sid = evtx.Sid();
+						  event_sourceEventName = evtx.SourceEventName();
+						  event_sourceGuid = evtx.SourceGuid();
+						  event_sourceName = evtx.SourceName();
+						  //event_theadID = evtx.ThreadID();
+						  event_timeGenerated =  evtx.TimeGenerated().GetString("yyyy/MM/dd","HH:mm:ss", -9*3600);
+						  event_timeWritten = evtx.TimeWritten().GetString("yyyy/MM/dd","HH:mm:ss", -9*3600);		
+					
+						 int offset,startOffset, endOffset ;
+						  if( (offset = evtx.XmlEventData().Find("DISK&") ) > 0) {
+								int tmpOffset =  evtx.XmlEventData().Find("lifetime") - 3;
+								String temp = evtx.XmlEventData().SubString(offset, tmpOffset - offset);
+								startOffset = temp.Find("VEN_") + 4;
+								endOffset = temp.Find("&PROD");
+								vendor = temp.SubString(startOffset, endOffset - startOffset);
+								startOffset = temp.Find("PROD_") + 5;
+								endOffset = temp.Find("&REV");
+								product = temp.SubString(startOffset, endOffset - startOffset);
+								startOffset = temp.Find("REV_") + 4;
+								endOffset = temp.Find("#");
+								revision = temp.SubString(startOffset, endOffset - startOffset);
+								startOffset = temp.Find("#") + 1;
+								endOffset = temp.Find("&0");
+								serialNum = temp.SubString(startOffset, endOffset - startOffset);							
+						  }
+						  if( (offset = evtx.XmlEventData().Find("lifetime") ) > 0) {
+								int tmpOffset = evtx.XmlEventData().Find("xmlns:auto");
+								String temp = evtx.XmlEventData().SubString(offset, tmpOffset-offset);
+								startOffset = temp.Find("=\"{") + 2;
+								endOffset = temp.Find("}") + 1;
+								lifeTime = temp.SubString(startOffset, endOffset - startOffset) ;
+							}				
+						  preEvtx=evtx;
+				}
+				
+				SystemClass::Sleep(500);
+				USBEventLog_dialog.TreeControl1.Input();
+				USBEventLog_dialog.time_check = false;
+				USBEventLog_dialog.Semaphore.Release();
+				
+				foreach(USBEventLogListClass n in USBEventLog_dialog.List1) {
+					USBEventLogListClass(USBEventLog_dialog.List_Copy_Value1, n.vendor, n.product, n.state, n.generatedTime, n.writtenTime, n.revision, n.serialNum, n.lifetimeGUID, n.sourceGUID, n.source, n.computer, n.SID);
+				}
+				USBEventLog_dialog.StatusWindow.SetPosition(StatusWindowMax);
+
+				BookmarkDataClass mark(folder, "USB_EventLog"); ///////////////////////////
+				// folder.SetComment("Comment for new BookmarkDataClass");
+				mark.SetRoot(USBEventLog_dialog.List1, USBEventLog_dialog.Handler1); ///////////////////////////
+				
+				//Console.WriteLine("Event Log ended");
+				BuildSqlite(); //Export sqlite file for timeline view in local "C:\\WindowsArtifact.sqlite"				
+				break;
+		} //while loop close
+
+	} //run()
+	
+				void BuildSqlite(){
+				  String exportPath = "C:\\TimeLineArtifacts.sqlite";
+
+					SQLiteClass sqliteDB();
+					LocalFileClass sqliteFile();
+					  if (!sqliteFile.Open(exportPath, FileClass::APPEND)){
+						SystemClass::Message(SystemClass::ICONINFORMATION, "Error", "Error in opening local  SQLite file");
+						Console.WriteLine("Error: Error in opening local SQLite file");
+						SystemClass::Exit();
+					  }
+					   if (sqliteDB.Open(sqliteFile, SQLiteClass::SQLITE_OPEN_READWRITE)){
+							sqliteFile.SetCodePage(CodePageClass::UTF8);
+						   SQLiteClass::CommandClass cmd = new SQLiteClass::CommandClass();
+						   if(sqliteDB.CreateCommand(cmd)){
+								 bool isSetTable = true;
+								  isSetTable = cmd.ExecuteNonQuery("CREATE TABLE USB_EventLog (id INTEGER PRIMARY KEY, Vendor LONGVARCHAR, Product LONGVARCHAR, State LONGVARCHAR, GeneratedTime LONGVARCHAR, WrittenTime LONGVARCHAR, FirmwareRevision LONGVARCHAR, SerialNumber LONGVARCHAR, LifeTimeGUID LONGVARCHAR, SourceGUID LONGVARCHAR, Source LONGVARCHAR, Computer LONGVARCHAR, SID LONGVARCHAR);");
+								 cmd.ExecuteNonQuery("BEGIN TRANSACTION;");
+								if(isSetTable){ //if table is set up successfully, insert value in each field
+									bool isQuery = true;									
+									foreach(USBEventLogListClass n in USBEventLog_dialog.List1) {
+										isQuery = cmd.ExecuteNonQuery("INSERT INTO USB_EventLog (Vendor, Product, State, GeneratedTime, WrittenTime, FirmwareRevision, SerialNumber, LifeTimeGUID, SourceGUID, Source, Computer, SID) VALUES ('" + n.vendor + "', '" + n.product + "', '" + n.state + "', '" + n.generatedTime + "', '" + n.writtenTime + "', '" + n.revision + "', '" + n.serialNum + "', '" + n.lifetimeGUID + "', '" + n.sourceGUID + "', '" + n.source + "', '" + n.computer + "', '" + n.SID + "');");
+										if(!isQuery) Console.WriteLine("\nError: Failed to execute query. Query is not correct.\n");										
+									}
+								}
+								//else SystemClass::Message(SystemClass::ICONINFORMATION, "Error", "SQLite Table was not set up correctly");
+								cmd.ExecuteNonQuery("END TRANSACTION;");
+							}
+							else Console.WriteLine("Error: SQLite Command could not be created successfully");
+					 }
+					 else SystemClass::Message(SystemClass::ICONINFORMATION, "Error", "SQLite Database Connection could not be opened correctly");
+					sqliteFile.Close();
+					sqliteDB.Close();
+				  Console.WriteLine("[+] USB_EventLog table is built in "+exportPath);
+				  //SystemClass::Message(SystemClass::ICONINFORMATION, "Notice", "USB EventLog Export Finish");
+			}
+
+}
+
+class USBDialogClass : DialogClass {
+
+	USBWindowsThreadClass USBWindows_thread;
+	USBEventLogThreadClass USBEventLog_thread;
+
+	ThreadClass::SemaphoreClass Semaphore;
+
+	USBRegListClass List, List_Copy_Value;
+	USBEventLogListClass List1, List_Copy_Value1;
+
+	USBWindowsHandlerClass Handler;
+	USBEventLogHandlerClass Handler1;
+
+	TreeTableEditClass TreeControl;
+	TreeTableEditClass TreeControl1;
+
+	StringEditClass FilterControl;
+
+	String filter_name;
+
+	StaticTextClass filter_title,
+	search_time;
+
+	ButtonClass button_search;
+
+	bool b_evtx;
+
+	bool time_check,
+	time_reset;
+
+	int hour,
+	minute,
+	second;
+
+	CaseClass c;
+
+	StatusWindowClass StatusWindow;
+
+	//Dialog Class Constructor
+
+	USBDialogClass(DialogClass parent, MainClass main, CaseClass c, BookmarkClass folder, int TreeViewSize) :
+	DialogClass(parent, "USB"),
+	c = c;
+
+	StatusWindow(this, "Searching", 5, 5, 240, 5, 0),
+	button_search(this, "Search ", 250, 15, 60, DEFAULT, 0),
+	search_time(this, "", 315, 17, 30, DEFAULT, 0),
+
+	FilterControl(this, "Keyword Search", 350, 5, 278, DEFAULT, 0, filter_name, 500, 0),
+
+	List(null, "List"),
+	List_Copy_Value(null, ""),
+	List1(null, "List"),
+	List_Copy_Value1(null, ""),
+	Handler(this, "Some Custom Class", 0, typeof(USBRegListClass)),
+	Handler1(this, "Some Custom Class", 0, typeof(USBEventLogListClass)),
+
+	TreeControl(this, "USB Registry ", 5, 30, 750, TreeViewSize/2, 0, List, ContextClass::CANCHECK | ContextClass::ALLFIELDS |
+		ContextClass::CANDELETENODE, ListEditClass::TABLEDEFAULT, Handler),
+	TreeControl1(this, "USB EventLog ", 5, TreeViewSize/2+43, 750, TreeViewSize/2, 0, List1, ContextClass::CANCHECK | ContextClass::ALLFIELDS |
+		ContextClass::CANDELETENODE, ListEditClass::TABLEDEFAULT, Handler1),
+	USBWindows_thread(this, "", c, folder),
+	USBEventLog_thread(this, "", c, folder)
+	{
+		TreeControl.SetView(ContextClass::PANETABLE);
+		TreeControl1.SetView(ContextClass::PANETABLE);
+		Semaphore.Create(1, 1);
+	}
+
+	virtual void ChildEvent(const EventClass & event) {
+
+		if (button_search.Matches(event)) {
+           if (Semaphore.Wait(10)) {
+                  USBWindows_thread.Start();
+				  USBEventLog_thread.Start();				  
+           } else {
+                 SystemClass::Message(SystemClass::ICONINFORMATION, "Warning", "Still Processing..");
+                 return;
+           }
+		}
+
+		if (FilterControl.Matches(event)) {
+			SearchClass search();
+			search.AddKeyword(FilterControl.GetText(), KeywordClass::UNICODE);
+
+			List.Close();
+			TreeControl.Input();
+			List1.Close();
+			TreeControl1.Input();
+
+			if (FilterControl.GetText() == "") { 
+				foreach(USBRegListClass n in List_Copy_Value) {
+					new USBRegListClass(List, n.vendor, n.prod, n.rev, n.UID, n.FriendlyName, n.FirstConnectedTime, n.BootFirstConnectedTime, n.GUIDD, n.GUIDV, n.LastConnectedTime);
+				}
+			} else {
+				foreach(USBRegListClass n in List_Copy_Value) {
+					if ((search.Find(n.vendor) == -1))
+						continue;
+					new USBRegListClass(List, n.vendor, n.prod, n.rev, n.UID, n.FriendlyName, n.FirstConnectedTime, n.BootFirstConnectedTime, n.GUIDD, n.GUIDV, n.LastConnectedTime);
+				}
+			}
+			if (FilterControl.GetText() == "") { 
+				foreach(USBEventLogListClass n in List_Copy_Value1) {
+					new USBEventLogListClass(List1, n.vendor, n.product, n.state, n.generatedTime, n.writtenTime, n.revision, n.serialNum, n.lifetimeGUID, n.sourceGUID, n.source, n.computer, n.SID);
+				}
+			} else {
+				foreach(USBEventLogListClass n in List_Copy_Value1) {
+					if ((search.Find(n.vendor) == -1))
+						continue;
+					new USBEventLogListClass(List1, n.vendor, n.product, n.state, n.generatedTime, n.writtenTime, n.revision, n.serialNum, n.lifetimeGUID, n.sourceGUID, n.source, n.computer, n.SID);
+				}
+			}
+			TreeControl.Input();
+			TreeControl1.Input();
+		}
+
+		DialogClass::ChildEvent(event);
+
+	} //virtual void ChildEvent
+
+	virtual void Setup() {
+		StatusWindow.SetLimit("Progress Status", 0); 
+		SetTimer(500); 
+	}
+
+    virtual void TimerEvent(uint timerId) {
+         if (time_reset) {
+           hour=0;
+           minute=0;
+           second=0;
+           time_reset = false;
+         }
+         if (time_check) {
+           second++;
+           if(second >= 60) {
+             second=0;
+             minute++;
+           }
+           if(minute >= 60) {
+             minute=0;
+             hour++;
+           }
+           search_time.SetText( String::Format("{0}:{1}:{2} ",hour,minute,second));
+         } else {
+           search_time.SetText( String::Format("{0}:{1}:{2} ",hour,minute,second));
+         }
+    }
+
+	virtual bool CanClose() {
+		return false;
+	}
+}

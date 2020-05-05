@@ -1,0 +1,689 @@
+class SysInfoListClass: NameListClass {
+
+      property String InfoName,
+							   Value;
+
+      SysInfoListClass(SysInfoListClass parent  = null, const String &InfoName = "", const String &value = ""):
+      NameListClass(parent, ""),
+      InfoName = InfoName,
+      Value = value
+      {
+      }
+}
+
+class _HandlerClass: HandlerClass { //OS Information
+       StringFieldClass  NameField;
+       StringFieldClass     ValueField;
+	   
+       _HandlerClass():
+        HandlerClass(null, "", 0, typeof(SysInfoListClass), ""),
+         NameField(this, "  OS Information", 0, SysInfoListClass::property(InfoName ), "name"),
+         ValueField(this, "Description", TEXTCENTER, SysInfoListClass::property(Value), "value")
+         {
+         }	  
+}
+class _HandlerClass1: HandlerClass { //Volume Information
+       StringFieldClass  NameField;
+       StringFieldClass     ValueField;
+	   
+       _HandlerClass1():
+        HandlerClass(null, "", 0, typeof(SysInfoListClass), ""),
+         NameField(this, "  Volume Information", 0, SysInfoListClass::property(InfoName ), "name"),
+         ValueField(this, "Description", TEXTCENTER, SysInfoListClass::property(Value), "value")
+         {
+         }
+}
+
+class _HandlerClass2: HandlerClass { //File Information
+       StringFieldClass  NameField;
+       StringFieldClass     ValueField;
+	   
+       _HandlerClass2():
+        HandlerClass(null, "", 0, typeof(SysInfoListClass), ""),
+         NameField(this, "  File Category", 0, SysInfoListClass::property(InfoName ), "name"),
+         ValueField(this, "Count (Rate)", TEXTCENTER, SysInfoListClass::property(Value), "value")
+         {
+         }
+}
+
+class FileReportClass : ReportClass	{
+			  SysInfoListClass  SysInfoList;
+			  BookmarkClass Folder;
+			  CaseClass C;
+			  _HandlerClass2 handler; //table related
+			  
+			  FileReportClass(CaseClass c, EntryClass e, BookmarkClass folder):
+			  SysInfoList(),
+			  handler(),
+			  Folder = folder,
+			  C = c
+			  { 
+			  	double  picCount,  appCount, docCount, multiCount, folderCount, internetCount, otherCount; 
+
+			  	for(ItemIteratorClass iter(c, 0, ItemIteratorClass::CURRENTVIEW_SELECTED); ItemClass item = iter.GetNextItem();) {
+					switch(item.Category()) {
+						case ItemClass::PICTURE : {
+							++picCount; //count the file type
+							break;
+						}
+						case ItemClass::APPLICATION : {
+							++appCount;
+							break;
+						}
+						case ItemClass::APPLICATION_DATA : {
+							++appCount;
+							break;
+						}
+						case ItemClass::DOCUMENT : {
+							++docCount;
+							break;
+						}
+						case ItemClass::DOCUMENT_CHART : {
+							++docCount;
+							break;
+						}
+						case ItemClass::DOCUMENT_FAX : {
+							++docCount;
+							break;
+						}
+						case ItemClass::DOCUMENT_PRESENTATION: {
+							++docCount;
+							break;
+						}
+						case ItemClass::DOCUMENT_SPREADSHEET : {
+							++docCount;
+							break;
+						}
+						case ItemClass::EMAIL : {
+							++internetCount;
+							break;
+						}
+						case ItemClass::EXECUTABLE : {
+							++appCount;
+							break;
+						}
+						case ItemClass::INTERNET : {
+							++internetCount;
+							break;
+						}
+						case ItemClass::MULTIMEDIA : {			
+							++multiCount;
+							break;
+						}
+						case ItemClass::MULTIMEDIA_AUDIO : {
+							++multiCount;
+							break;
+						}
+						case ItemClass::MULTIMEDIA_VIDEO : {
+							++multiCount;
+							break;
+						}
+						case ItemClass::FOLDER : {
+							++folderCount;
+							break;
+						}
+						default : {
+							++otherCount;
+							break;
+						}
+					}
+				}
+				double totalCount; //static FormatDouble (double Value, uint digits, uint Options=String::MINDIGITS)
+				totalCount = picCount + appCount + docCount + multiCount + internetCount + otherCount;
+				
+				new SysInfoListClass(SysInfoList, "  Pictures",  picCount+" ( "+String::FormatDouble(picCount / totalCount *100, 3, String::MINDIGITS)+"% )" );
+				new SysInfoListClass(SysInfoList, "  Applications",  appCount+" ( "+String::FormatDouble(appCount/totalCount * 100, 3, String::MINDIGITS)+"% )" );
+				new SysInfoListClass(SysInfoList, "  Documents",  docCount+" ( "+String::FormatDouble(docCount/totalCount * 100, 3, String::MINDIGITS)+"% )" );
+				new SysInfoListClass(SysInfoList, "  Multimedia Files", multiCount+" ( "+String::FormatDouble(multiCount/totalCount * 100, 3, String::MINDIGITS)+"% )" );
+				new SysInfoListClass(SysInfoList, "  Internet FIles",   internetCount+" ( "+String::FormatDouble(internetCount/totalCount * 100, 3, String::MINDIGITS)+"% )" );
+				new SysInfoListClass(SysInfoList, "  Other Files",  otherCount+" ( "+String::FormatDouble(otherCount/totalCount * 100, 3, String::MINDIGITS)+"% )");
+				new SysInfoListClass(SysInfoList, "  Total Files", totalCount+" ( 100.000% )");
+				
+			}
+			
+		   virtual void BuildDocument(ExportClass export) {
+				  ExportClass::TableClass table();
+				  export.Write("\n");
+				  export.AddTable(table, GetContext());
+			 }
+
+		   ContextClass GetContext() {
+		   ContextClass context(null, "", 0, SysInfoList, new _HandlerClass2());
+		   ContextClass::ColumnClass cols(),
+									 nameColumn(cols, "name", 0, 20, 2500),
+									 sourColumn(cols, "value", 0, 20, 6500);
+
+		   nameColumn.SetTag("name");
+		   sourColumn.SetTag("value");
+
+		   context.SetColumns(cols);
+		   context.SetNodes();
+		 //  context.Sort();
+		   return context;
+		 }
+			 
+	}
+	
+class VolumeReportClass : ReportClass	{
+			  SysInfoListClass  SysInfoList;
+			  BookmarkClass Folder;
+			  CaseClass C;
+			  _HandlerClass1 handler; //table related
+			  
+			  VolumeReportClass(CaseClass c, EntryClass e, BookmarkClass folder):
+			  SysInfoList(),
+			  handler(),
+			  Folder = folder,
+			  C = c
+			  { 
+					for(ItemIteratorClass iter(c, 0, ItemIteratorClass::ALL); EntryClass entry = iter.GetNextEntry();) {
+					  if (entry.IsVolume()) {
+						  VolumeClass vol = entry.GetVolume();
+						  if (vol) {
+							   if(vol.WinDir().Find("Windows") != -1) {
+								   	long total, allocated,	unallocated;
+									String encryptType;
+									
+									total = vol.TotalCapacity();
+									unallocated = vol.UnallocatedSpace();
+									allocated =  total - unallocated;
+							
+									CredentialClass creds();
+									if (vol.IsEncrypted(creds)) {
+										encryptType = CredentialClass::EncryptionTypes::DisplayText(creds.EncryptionType());
+										//Console.WriteLine("   Encryption Type	: {0}", encryptType);
+									}
+										new SysInfoListClass(SysInfoList, "  Volume Name",  vol.Name() );
+										new SysInfoListClass(SysInfoList, "  Volume File System",  VolumeClass::FileSystems::SourceText(vol.GetFileSystem()) );
+										new SysInfoListClass(SysInfoList, "  Windows Directory",  vol.WinDir() );
+										new SysInfoListClass(SysInfoList, "  Profile Directory",  vol.ProfileDir() );
+										new SysInfoListClass(SysInfoList, "  Free Clusters",  vol.FreeClusters() );
+										new SysInfoListClass(SysInfoList, "  Total Capacity",  total+ " Bytes ("+ total/(1024*1024*1024)+"GB)" );
+										new SysInfoListClass(SysInfoList, "  Unallocated Space",  unallocated+" Bytes ("+ unallocated/(1024*1024*1024)+"GB)");
+										new SysInfoListClass(SysInfoList, "  Allocated Space",  allocated+" Bytes ("+ allocated/(1024*1024*1024)+"GB)");
+										new SysInfoListClass(SysInfoList, "  Encryption Type",  encryptType );
+										 
+										 BookmarkDataClass mark(folder, "Information");													 
+										 mark.SetRoot(SysInfoList ,handler);
+
+										break;
+
+								}
+							}
+						}
+					}	
+
+			  }
+			  
+		   virtual void BuildDocument(ExportClass export) {
+				  ExportClass::TableClass table();
+				  export.Write("\n");
+				  export.AddTable(table, GetContext());
+			 }
+
+			   ContextClass GetContext() {
+			   ContextClass context(null, "", 0, SysInfoList, new _HandlerClass1());
+			   ContextClass::ColumnClass cols(),
+										 nameColumn(cols, "name", 0, 20, 3500),
+										 sourColumn(cols, "value", 0, 20, 6500);
+
+			   nameColumn.SetTag("name");
+			   sourColumn.SetTag("value");
+
+			   context.SetColumns(cols);
+			   context.SetNodes();
+			   return context;
+			 }
+	}
+	
+class OSReportClass: ReportClass {
+      SysInfoListClass  SysInfoList;
+      BookmarkClass Folder;
+      typedef char[] charArray;
+      _HandlerClass handler;
+	  
+      OSReportClass(EntryClass e, BookmarkClass folder):
+      SysInfoList(),
+      handler(),
+      Folder = folder
+      {
+           RegCommandClass cmds();
+           RegistryClass reg(e);
+
+           //User name
+           new RegCommandClass(cmds, "SAM\\Users", RegCommandClass::READKEY, RegCommandClass::HKEY_LOCAL_MACHINE,
+                                     "SAM\\SAM\\Domains\\Account\\Users", "", 0, 1);
+           //Os installed date, Product ID
+           new RegCommandClass(cmds, "CurrentVersionKey", RegCommandClass::READKEY, RegCommandClass::HKEY_LOCAL_MACHINE,
+                                     "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion", "", 0, 0);
+
+           //Windows Product key
+           new RegCommandClass(cmds, "DigitalProductId", RegCommandClass::READVALUE,RegCommandClass::HKEY_LOCAL_MACHINE,
+                                     "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion", "DigitalProductId", 0, 0);
+			 //Os installed date, Product ID
+           new RegCommandClass(cmds, "ActiveComputerName", RegCommandClass::READKEY, RegCommandClass::HKEY_LOCAL_MACHINE,
+                                     "SYSTEM\\ControlSet001\\Control\\ComputerName\\ActiveComputerName", "ComputerName", 0, 0);
+           new RegCommandClass(cmds, "ComputerName", RegCommandClass::READKEY, RegCommandClass::HKEY_LOCAL_MACHINE,
+                                     "SYSTEM\\ControlSet001\\Control\\ComputerName\\ComputerName", "ComputerName", 0, 0);
+           new RegCommandClass(cmds, "ShutdownTime", RegCommandClass::READKEY, RegCommandClass::HKEY_LOCAL_MACHINE,
+                                     "SYSTEM\\ControlSet001\\Control\\Windows", "ShutdownTime", 0, 0);									 								 
+
+            RegValueClass values(); //registry value container
+           if (reg.Run(cmds, values)) {
+                 String ProductName, RegisteredOwner, RegisteredOrganization, ProductId, ProductKey, ServicePack, CurrentType, CurrentVersion, BuildLab, InstallDate, InstallationType, SystemRoot;
+                 RegValueClass CurrentVersionKey = values.Find("CurrentVersionKey");   //OS installed time, Product key
+                 if (CurrentVersionKey) {
+                      forall (RegValueClass n in CurrentVersionKey) {
+						  switch(n.Name()){
+                             case "BuildLab" : 
+								BuildLab = n.ValueText();
+								break;                       							 
+                             case "CurrentType" : 
+								CurrentType = n.ValueText();
+								break;       
+  							 case "InstallDate": 
+							    DateClass date();
+                                date.SetUnix(int::Convert(n.ValueText(),int::HEX));
+                                InstallDate = date.GetString("yyyy/MM/dd", "hh:mm:ss tt", 9 * -3600);								
+								break; 
+  							 case "InstallationType":
+							    InstallationType = n.ValueText();
+								break;          								
+                             case "ProductName" : 
+								ProductName = n.ValueText();
+								break;                            
+                             case "RegisteredOwner" : 
+								RegisteredOwner = n.ValueText();
+								break;                            
+                             case "RegisteredOrganization" :
+					 			RegisteredOrganization = n.ValueText();
+								break;                            
+                             case "ProductId" : 
+								ProductId = n.ValueText();
+								break;                                                
+                             case "CurrentVersion" :
+								CurrentVersion = n.ValueText();
+								break;               
+                             case "SystemRoot" : 
+								SystemRoot = n.ValueText();
+								break;                            
+                             case "CSDVersion" : 
+								ServicePack = n.ValueText();
+								break;
+					  		 default:
+                            }
+						}
+                 }
+                 String VersionInfo =  CurrentType + "  " + CurrentVersion + "  " + BuildLab; //Merge Current Version information
+                 RegValueClass DigitalProductIdValue = values.Find("DigitalProductId"); //Windows Product key decoding
+				 RegValueClass ActiveComputerNameValue = values.Find("ComputerName"); //Windows Computer Name
+				 RegValueClass ComputerNameValue = values.Find("ComputerName");
+				 RegValueClass ShutdownTimeValue = values.Find("ShutdownTime");
+				 
+				 String ComputerName = GetComputerName(ActiveComputerNameValue, ComputerNameValue);				 
+				 String LastShutdownTime = GetShutdownTime(ShutdownTimeValue);
+				 ProductKey = GetProductKey(DigitalProductIdValue);
+				
+                 new SysInfoListClass(SysInfoList, "  Product Name", ProductName );
+                 new SysInfoListClass(SysInfoList, "  Registered Owner", RegisteredOwner );
+                 new SysInfoListClass(SysInfoList, "  Registered Organization", RegisteredOrganization );
+                 new SysInfoListClass(SysInfoList, "  Product ID", ProductId );
+                 new SysInfoListClass(SysInfoList, "  Product Key", ProductKey );
+                 new SysInfoListClass(SysInfoList, "  Service Pack", ServicePack );                 
+                 new SysInfoListClass(SysInfoList, "  Current Version", VersionInfo);
+                 new SysInfoListClass(SysInfoList, "  Install Date", InstallDate );
+				 new SysInfoListClass(SysInfoList, "  Installation Type", InstallationType );
+				 new SysInfoListClass(SysInfoList, "  Computer Name", ComputerName);
+				 new SysInfoListClass(SysInfoList, "  Last Shutdown Time", LastShutdownTime);
+                 new SysInfoListClass(SysInfoList, "  System Root", SystemRoot );
+				 
+                 BookmarkDataClass mark(folder, "OS Information");
+                 mark.SetRoot(SysInfoList ,handler);
+          }
+
+     }	
+ 
+	 String GetShutdownTime(RegValueClass ShutdownTimeValue){
+		String ShutdownTime, HexTime;
+		long sumTime;
+		FileClass value;
+		 forall (RegValueClass n in ShutdownTimeValue) {
+			 if(n.Name() == "ShutdownTime"){
+				DateClass date();
+				//sumTime = long::Convert(n.ValueText(), int::HEX);
+				sumTime = 0x4C88FA9A896FD301;
+				//Console.WriteLine(sumTime);
+				//date.SetUnix(sumTime);
+				//ShutdownTime = date.GetString("yyyy/MM/dd", "hh:mm:ss tt", 9 * -3600);
+				if(ShutdownTime.Contains("1970")) ShutdownTime="";
+			 }
+		 }	
+		return ShutdownTime;
+	 }	 
+	 
+	 String GetComputerName(RegValueClass ActiveComputerNameValue, RegValueClass ComputerNameValue){
+		String ComputerName;
+		 forall (RegValueClass n in ActiveComputerNameValue) {
+			 if(n.Name() == "ComputerName")
+				ComputerName = n.ValueText();
+		 }
+		 forall (RegValueClass n in ComputerNameValue) {
+			 if(n.Name() == "ComputerName")
+				ComputerName = n.ValueText();
+		 }	
+		return ComputerName;
+	 }
+	 
+	 String GetProductKey(RegValueClass DigitalProductIdValue){
+		 String ProductKey;
+			if (DigitalProductIdValue) {
+			   String DigitalProductId = DigitalProductIdValue.ValueText();
+			   if(DigitalProductId != "0 is not ready") {
+				   DigitalProductId.Trim(" ",TRIMALL,0);
+				   //charArray key{ 'B', 'C', 'D', 'F', 'G', 'H', 'J', 'K', 'M', 'P', 'Q', 'R', 'T', 'V', 'W', 'X', 'Y', '2', '3', '4', '6', '7', '8', '9'}, digits();
+				   charArray digits(), DigitalProductId_Convert(),hexPid(),data();
+				   digits.Add('B');digits.Add('C');digits.Add('D');digits.Add('F');digits.Add('G');digits.Add('H');digits.Add('J');digits.Add('K');digits.Add('M');
+				   digits.Add('P');digits.Add('Q');digits.Add('R');digits.Add('T');digits.Add('V');digits.Add('W');digits.Add('X');digits.Add('Y');digits.Add('2');
+				   digits.Add('3');digits.Add('4');digits.Add('6');digits.Add('7');digits.Add('8');digits.Add('9');
+
+				   for(int i =0 ; i < DigitalProductId.GetLength() ; i++) {
+					  if( i%2 ==0) {
+							DigitalProductId_Convert.Add( int::Convert("\x"+DigitalProductId[i]+DigitalProductId[i+1],int::HEX));
+					  }
+				   }
+
+				   int keyStart = 52;
+				   int decodeStringLength = 15;
+				   int keyEnd = keyStart + decodeStringLength;
+				   int decodeLength = 29;				   
+
+				   for(int i = keyStart; i <=keyEnd ; i++) {
+					   hexPid.Add(DigitalProductId_Convert[i]);
+				   }
+				   String key_tmp;
+				   String key;
+
+				   for(int i = decodeLength -1; i>=0 ;i--) {
+					   if ( ( i + 1 ) % 6 == 0 ) {
+							key += '-';
+					   }
+					   else {
+						   int digitMapIndex = 0;
+						   for ( int j =decodeStringLength -1 ; j>=0 ; j--) {
+								  int byteValue = (digitMapIndex << 8 ) | hexPid[j];
+								  hexPid[j] = (byteValue/24);
+								  digitMapIndex = byteValue % 24;
+								  key_tmp = digits[digitMapIndex];
+						   }
+						   key += key_tmp;
+					   }
+				   }
+				   
+				   for(int i = key.GetLength() -1 ; i >= 0 ; i--) {
+					   ProductKey += key[i];
+				   }
+			   }
+			}
+		 return ProductKey;
+	 }
+
+     virtual void BuildDocument(ExportClass export) {
+          ExportClass::TableClass table();
+          export.Write("\n");
+          export.AddTable(table, GetContext());
+     }
+
+       ContextClass GetContext() {
+       ContextClass context(null, "", 0, SysInfoList, new _HandlerClass());
+       ContextClass::ColumnClass cols(),
+                                 nameColumn(cols, "name", 0, 20, 3500),
+                                 sourColumn(cols, "value", 0, 20, 5500);
+
+       nameColumn.SetTag("name");
+       sourColumn.SetTag("value");
+
+       context.SetColumns(cols);
+       context.SetNodes();
+     //  context.Sort();
+       return context;
+     }
+}
+
+class CreateChartClass {
+	CaseClass C;
+	CreateChartClass(CaseClass c):
+	C=c
+	{
+	}
+	
+	ChartClass GetChart(ChartClass::ChartTypes chosenType){						  
+			  	double  picCount,  appCount, docCount, multiCount, folderCount, internetCount, otherCount; 
+
+			  	for(ItemIteratorClass iter(C, 0, ItemIteratorClass::CURRENTVIEW_SELECTED); ItemClass item = iter.GetNextItem();) {
+					switch(item.Category()) {
+						case ItemClass::PICTURE : {
+							++picCount; //count the file type
+							break;
+						}
+						case ItemClass::APPLICATION : {
+							++appCount;
+							break;
+						}
+						case ItemClass::APPLICATION_DATA : {
+							++appCount;
+							break;
+						}
+						case ItemClass::DOCUMENT : {
+							++docCount;
+							break;
+						}
+						case ItemClass::DOCUMENT_CHART : {
+							++docCount;
+							break;
+						}
+						case ItemClass::DOCUMENT_FAX : {
+							++docCount;
+							break;
+						}
+						case ItemClass::DOCUMENT_PRESENTATION: {
+							++docCount;
+							break;
+						}
+						case ItemClass::DOCUMENT_SPREADSHEET : {
+							++docCount;
+							break;
+						}
+						case ItemClass::EMAIL : {
+							++internetCount;
+							break;
+						}
+						case ItemClass::EXECUTABLE : {
+							++appCount;
+							break;
+						}
+						case ItemClass::INTERNET : {
+							++internetCount;
+							break;
+						}
+						case ItemClass::MULTIMEDIA : {			
+							++multiCount;
+							break;
+						}
+						case ItemClass::MULTIMEDIA_AUDIO : {
+							++multiCount;
+							break;
+						}
+						case ItemClass::MULTIMEDIA_VIDEO : {
+							++multiCount;
+							break;
+						}
+						case ItemClass::FOLDER : {
+							++folderCount;
+							break;
+						}
+						default : {
+							++otherCount;
+							break;
+						}
+					}
+				}
+				double totalCount; //static FormatDouble (double Value, uint digits, uint Options=String::MINDIGITS)
+				totalCount = picCount + appCount + docCount + multiCount + internetCount + otherCount;
+				if(totalCount == 0){
+					 SystemClass::Message(SystemClass::ICONINFORMATION, "Error","Failed to build chart. Null value in the list.");
+					return null;
+				}
+			NameValueClass chartValues();
+			new NameValueClass(chartValues, "Pictures", 0, picCount / totalCount *100);
+			new NameValueClass(chartValues, "Applications", 0, appCount/totalCount * 100);
+			new NameValueClass(chartValues, "Documents", 0, docCount/totalCount * 100);
+			new NameValueClass(chartValues, "Multimedia Files", 0, multiCount/totalCount * 100);
+			new NameValueClass(chartValues, "Internet Files", 0, internetCount/totalCount * 100);
+			new NameValueClass(chartValues, "Other Files", 0, otherCount/totalCount * 100);
+			
+			ChartClass chart = new ChartClass(null, "CHART", chosenType);
+			 foreach (NameValueClass n in chartValues){
+				bool isSuccess = false;
+				chart.AddDataPoint(n.Name(), double::Convert(n.Value(), isSuccess));
+			}
+			
+		  //  	ChartClass chart = CreateChart(chartValues);
+				return chart;
+	}
+	
+}
+
+class MainClass;
+
+class SysInfoDialogClass : DialogClass {
+      ReportWindowClass  ReportWindow1, ReportWindow2, ReportWindow3, ReportWindow4;
+	  ImageWindowClass  ChartImageWindow;
+	  String     logoText;
+	  StringEditClass Edit;
+
+	  RectClass   logoRect;
+	  GraphicsClass Graphics;
+	  
+	  ButtonClass             button_chart;
+      RadioButtonClass  ChartTypeButton;
+	  CheckBoxClass     ShowHorizontal;
+	  CreateChartClass CreatedChart;
+	  FileReportClass FileReport;
+	  ReportClass ReportA;
+	  ChartClass ChartPie,ChartBar,ChartLine;
+	  
+	  TreeTableEditClass TreeControl;
+	  ThreadClass::SemaphoreClass   Semaphore;
+	  
+	  CaseClass c;
+	  EntryClass e;
+	  BookmarkClass folder;
+	  int               ChartType;
+	  bool              ShowAsHorizontal;
+	  
+	  //InfoDialogClass Constructor
+      SysInfoDialogClass(DialogClass parent, MainClass main, CaseClass &c, EntryClass e, BookmarkClass folder) :
+      DialogClass(parent,"System Information"), //Create System Information dialog
+	  c=c;
+	  e=e;
+	  folder=folder;
+	  //Create tables on the dialog
+      ReportWindow1(this, "OS Information Report", START, START, 370, 125, 0, 0, new OSReportClass(e,folder)), //Create tables on the dialog
+	  ReportWindow2(this, "Volume Information Report", START, NEXT, 370, 105,  0, 0, new VolumeReportClass(c, e,folder)),	  
+	  ChartImageWindow(this, "File Information Report", 385, START, 320, 150, 0),
+	  ReportWindow3(this, "", 385, 170, 370, 90,  0, 0, new FileReportClass(c,e,folder)),
+	 // TreeControl(this, "RecycleBin ", 10, 240, 750, 110, 0, null, ContextClass::CANCHECK | ContextClass::ALLFIELDS |ContextClass::CANDELETENODE, ListEditClass::TABLEDEFAULT, HandlerClass handler =null  ),
+		button_chart(this, "Chart ", 710, 15, 30, 20, 0),
+		ChartTypeButton(this, "Type", SAME, NEXT, 40, 10, 0, ChartType, "Pie\tBar\tLine", RadioButtonClass::GROUPBOX),
+		ShowHorizontal(this, "Convert", SAME, NEXT, 15, 10, 0, ShowAsHorizontal),
+		logoText = "KITRI BoB Shellock",
+	//	LogoText(this, Text, 125, 280, 500, 80, PUSHBUTTON),
+     //BarCode(this, START, 265, 750, 85, Text),
+	    logoRect(370, 800, 750, 100),
+		//RectStr(0, 0, 100, 20),
+		CreatedChart = new CreateChartClass(c)
+      {
+		Semaphore.Create(1,1);
+      }
+	    
+	  virtual void ChildEvent(const EventClass &event) {
+		DialogClass::ChildEvent(event);
+
+			if(button_chart.Matches(event)){
+				if(Semaphore.Wait(10)){
+				SystemClass::Message(SystemClass::ICONINFORMATION, "Notice","Chart View OK");					
+				BuildChart();
+				ChartPie.SetChartType(ChartClass::ChartTypes::CHARTPIE);
+				ChartPie.SetHorizontal(ShowHorizontal.GetValue());
+				ChartImageWindow.SetImage(ChartPie);
+				}
+				else{
+				  SystemClass::Message(SystemClass::ICONINFORMATION, "Notice","Chart View OK");
+				}
+			}
+		if(ChartTypeButton.Matches(event)){
+			  ShowChart();
+		}
+	  }	 
+	  
+	  void BuildChart(){
+	  	ChartPie = CreatedChart.GetChart(ChartClass::ChartTypes::CHARTPIE);
+		ChartBar = CreatedChart.GetChart(ChartClass::ChartTypes::CHARTBAR);
+		ChartLine = CreatedChart.GetChart(ChartClass::ChartTypes::CHARTLINE); //Create Chart	  
+	  }
+	  
+	  void ShowChart() {
+		 if(!ChartPie) return;
+		 
+		int chosenChartType = ChartTypeButton.GetValue();
+		if (chosenChartType == 0) //if Pie type prevent Show Horizontal
+		  ShowHorizontal.Enable(false);
+		else
+		  ShowHorizontal.Enable(true);
+
+	    ChartClass::ChartTypes mappedType = MapChartTypes(chosenChartType);
+	  if(mappedType == ChartClass::ChartTypes::CHARTPIE){
+		ChartPie.SetChartType(mappedType);
+		ChartPie.SetHorizontal(ShowHorizontal.GetValue());
+		ChartImageWindow.SetImage(ChartPie);
+	  }
+	  else if(mappedType == ChartClass::ChartTypes::CHARTBAR){
+		ChartBar.SetChartType(mappedType);
+		ChartBar.SetHorizontal(ShowHorizontal.GetValue());
+		ChartImageWindow.SetImage(ChartBar);
+	  }
+	  else if(mappedType == ChartClass::ChartTypes::CHARTLINE){
+		ChartLine.SetChartType(mappedType);
+		ChartLine.SetHorizontal(ShowHorizontal.GetValue());
+		ChartImageWindow.SetImage(ChartLine);
+	  }
+	/*
+		ChartA = CreatedChart.GetChart();
+		ChartA.SetChartType(ChartClass::ChartTypes::CHARTPIE);
+		ChartImageWindow.SetImage(ChartA);*/
+	  }
+	  
+	  ChartClass::ChartTypes MapChartTypes(int chosenChartType) {
+		if (chosenChartType == 0)
+		  return ChartClass::ChartTypes::CHARTPIE;
+		else if (chosenChartType == 1)
+		  return ChartClass::ChartTypes::CHARTBAR;
+		else if (chosenChartType == 2)
+		  return ChartClass::ChartTypes::CHARTLINE;
+		return ChartClass::ChartTypes::CHARTNONE;
+	  }
+
+	  
+	  virtual void PaintEvent(GraphicsClass g) {
+		g.DrawString(logoText, logoRect);
+		PointClass Point = g.StringSize(logoText);
+
+		g.Fill(logoRect, ColorClass::White);
+		FontClass font(null, "", FontClass::BOLD, "Times New Roman", Point.Y*40);
+		g.SetFont(font);
+		g.DrawString(String::Format(logoText), logoRect, DRAWCENTER, ColorClass::Black);
+	  }
+  
+}
+//ReportWindowClass (WindowClass parent, const String &Title, int x, int y, int width, int height, ulong style, uint Options=0, ReportClass Report=null, ScaleClass state=null)
+
